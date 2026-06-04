@@ -1,0 +1,11 @@
+{
+  "name": "apple-plus",
+  "version": "0.1.0",
+  "private": true,
+  "packageManager": "pnpm@9.4.0",
+  "scripts": {
+    "api:dev": "pnpm --filter @apple-plus/api start:dev",
+    "api:build": "pnpm --filter @apple-plus/api build",
+    "api:test": "pnpm --filter @apple-plus/api test"
+  }
+}
