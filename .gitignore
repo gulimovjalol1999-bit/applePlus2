@@ -1,7 +1,12 @@
 node_modules/
 dist/
+.next/
 .env
 .env.local
+.env.production
+.env.staging
 *.log
 coverage/
 .DS_Store
+# Docker
+.dockerignore
