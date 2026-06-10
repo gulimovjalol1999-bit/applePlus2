@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Delete,
@@ -13,6 +14,7 @@ import {
 } from '@nestjs/common';
 import {
   ApiBearerAuth,
+  ApiHeader,
   ApiOkResponse,
   ApiOperation,
   ApiTags,
@@ -32,6 +34,8 @@ import { CartResponseDto } from './dto/cart-response.dto';
 export class CartController {
   constructor(private readonly cartService: CartService) {}
 
+  // ─── Authenticated endpoints ───────────────────────────────────────────────
+
   @Get()
   @ApiBearerAuth()
   @UseGuards(JwtAuthGuard)
@@ -41,32 +45,13 @@ export class CartController {
     return this.cartService.getCart(user.id);
   }
 
-  @Get('guest')
-  @ApiOperation({ summary: 'Get guest cart by session ID (X-Session-Id header)' })
-  @ApiOkResponse({ type: CartResponseDto })
-  getGuestCart(@Req() req: Request) {
-    const sessionId = req.headers['x-session-id'] as string;
-    return this.cartService.getCart(undefined, sessionId);
-  }
-
   @Post('items')
   @ApiBearerAuth()
   @UseGuards(JwtAuthGuard)
   @ApiOperation({ summary: 'Add item to cart (authenticated)' })
   @ApiOkResponse({ type: CartResponseDto })
-  addItem(
-    @Body() dto: AddToCartDto,
-    @CurrentUser() user: { id: string },
-  ) {
+  addItem(@Body() dto: AddToCartDto, @CurrentUser() user: { id: string }) {
     return this.cartService.addItem(dto, user.id);
-  }
-
-  @Post('guest/items')
-  @ApiOperation({ summary: 'Add item to guest cart (X-Session-Id header)' })
-  @ApiOkResponse({ type: CartResponseDto })
-  addGuestItem(@Body() dto: AddToCartDto, @Req() req: Request) {
-    const sessionId = req.headers['x-session-id'] as string;
-    return this.cartService.addItem(dto, undefined, sessionId);
   }
 
   @Patch('items/:variantId')
@@ -98,7 +83,7 @@ export class CartController {
   @ApiBearerAuth()
   @UseGuards(JwtAuthGuard)
   @HttpCode(HttpStatus.NO_CONTENT)
-  @ApiOperation({ summary: 'Clear entire cart' })
+  @ApiOperation({ summary: 'Clear entire cart (authenticated)' })
   clearCart(@CurrentUser() user: { id: string }) {
     return this.cartService.clearCart(user.id);
   }
@@ -108,10 +93,66 @@ export class CartController {
   @UseGuards(JwtAuthGuard)
   @ApiOperation({ summary: 'Merge guest cart into user cart after login' })
   @ApiOkResponse({ type: CartResponseDto })
-  mergeCart(
-    @Body() dto: MergeCartDto,
-    @CurrentUser() user: { id: string },
+  mergeCart(@Body() dto: MergeCartDto, @CurrentUser() user: { id: string }) {
+    return this.cartService.mergeSessionCart(user.id, dto.sessionId);
+  }
+
+  // ─── Guest endpoints (X-Session-Id header required) ───────────────────────
+
+  @Get('guest')
+  @ApiHeader({ name: 'X-Session-Id', description: 'Guest session ID', required: true })
+  @ApiOperation({ summary: 'Get guest cart' })
+  @ApiOkResponse({ type: CartResponseDto })
+  getGuestCart(@Req() req: Request) {
+    return this.cartService.getCart(undefined, this.requireSessionId(req));
+  }
+
+  @Post('guest/items')
+  @ApiHeader({ name: 'X-Session-Id', description: 'Guest session ID', required: true })
+  @ApiOperation({ summary: 'Add item to guest cart' })
+  @ApiOkResponse({ type: CartResponseDto })
+  addGuestItem(@Body() dto: AddToCartDto, @Req() req: Request) {
+    return this.cartService.addItem(dto, undefined, this.requireSessionId(req));
+  }
+
+  @Patch('guest/items/:variantId')
+  @ApiHeader({ name: 'X-Session-Id', description: 'Guest session ID', required: true })
+  @ApiOperation({ summary: 'Update guest cart item quantity' })
+  @ApiOkResponse({ type: CartResponseDto })
+  updateGuestItem(
+    @Param('variantId', ParseUuidPipe) variantId: string,
+    @Body() dto: UpdateCartItemDto,
+    @Req() req: Request,
   ) {
-    return this.cartService.mergeSessionCart(user.id, dto.sessionId ?? '');
+    return this.cartService.updateItem(variantId, dto, undefined, this.requireSessionId(req));
+  }
+
+  @Delete('guest/items/:variantId')
+  @ApiHeader({ name: 'X-Session-Id', description: 'Guest session ID', required: true })
+  @ApiOperation({ summary: 'Remove item from guest cart' })
+  @ApiOkResponse({ type: CartResponseDto })
+  removeGuestItem(
+    @Param('variantId', ParseUuidPipe) variantId: string,
+    @Req() req: Request,
+  ) {
+    return this.cartService.removeItem(variantId, undefined, this.requireSessionId(req));
+  }
+
+  @Delete('guest')
+  @ApiHeader({ name: 'X-Session-Id', description: 'Guest session ID', required: true })
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @ApiOperation({ summary: 'Clear guest cart' })
+  clearGuestCart(@Req() req: Request) {
+    return this.cartService.clearCart(undefined, this.requireSessionId(req));
+  }
+
+  // ─── helper ───────────────────────────────────────────────────────────────
+
+  private requireSessionId(req: Request): string {
+    const sessionId = req.headers['x-session-id'] as string | undefined;
+    if (!sessionId?.trim()) {
+      throw new BadRequestException('X-Session-Id header is required');
+    }
+    return sessionId;
   }
 }

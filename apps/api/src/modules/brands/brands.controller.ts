@@ -19,6 +19,7 @@ import {
   ApiOperation,
   ApiTags,
 } from '@nestjs/swagger';
+import { ApiPaginatedResponse } from '../../common/decorators/api-paginated-response.decorator';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
@@ -38,7 +39,7 @@ export class BrandsController {
 
   @Get()
   @ApiOperation({ summary: 'List brands (paginated)' })
-  @ApiOkResponse({ type: BrandResponseDto, isArray: true })
+  @ApiPaginatedResponse(BrandResponseDto)
   findAll(@Query() filter: BrandFilterDto) {
     return this.brandsService.findAll(filter);
   }

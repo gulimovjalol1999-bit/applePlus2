@@ -1,6 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsDate, IsEnum, IsObject, IsOptional, IsString, MaxLength } from 'class-validator';
-import { Type } from 'class-transformer';
+import { IsEnum, IsObject, IsOptional, IsString, MaxLength } from 'class-validator';
 import { PaymentStatus } from '../../../common/enums/payment-status.enum';
 
 export class UpdatePaymentDto {
@@ -18,10 +17,5 @@ export class UpdatePaymentDto {
   @IsObject()
   @IsOptional()
   metadata?: Record<string, unknown>;
-
-  @ApiPropertyOptional({ nullable: true })
-  @Type(() => Date)
-  @IsDate()
-  @IsOptional()
-  paidAt?: Date;
+  // paidAt is server-set only (set to now() when status transitions to PAID)
 }

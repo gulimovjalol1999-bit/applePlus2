@@ -8,7 +8,9 @@ import {
 } from '@nestjs/common';
 import {
   ApiBearerAuth,
+  ApiBody,
   ApiCreatedResponse,
+  ApiNoContentResponse,
   ApiOkResponse,
   ApiOperation,
   ApiTags,
@@ -49,6 +51,7 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   @UseGuards(JwtRefreshGuard)
   @ApiOperation({ summary: 'Rotate refresh token and get a new access token' })
+  @ApiBody({ type: RefreshTokenDto })
   @ApiOkResponse({ type: TokenPairDto })
   refresh(@CurrentUser() user: { id: string }): Promise<TokenPairDto> {
     return this.auth.refresh(user.id);
@@ -59,6 +62,7 @@ export class AuthController {
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Invalidate the current access + refresh tokens' })
+  @ApiNoContentResponse({ description: 'Successfully logged out' })
   logout(@CurrentUser() user: { id: string; jti: string; exp: number }): Promise<void> {
     return this.auth.logout(user.id, user.jti, user.exp);
   }

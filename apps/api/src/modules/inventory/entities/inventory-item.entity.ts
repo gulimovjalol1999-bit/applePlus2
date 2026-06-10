@@ -1,6 +1,7 @@
 import {
   Check,
   Column,
+  CreateDateColumn,
   Entity,
   JoinColumn,
   OneToMany,
@@ -42,6 +43,9 @@ export class InventoryItem {
 
   @Column({ type: 'varchar', length: 100, nullable: true })
   warehouseLocation: string | null;
+
+  @CreateDateColumn({ type: 'timestamptz' })
+  createdAt: Date;
 
   @UpdateDateColumn({ type: 'timestamptz' })
   updatedAt: Date;

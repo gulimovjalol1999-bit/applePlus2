@@ -1,6 +1,8 @@
 import { Module } from '@nestjs/common';
-import { ConfigModule } from '@nestjs/config';
+import { ConfigModule, ConfigService } from '@nestjs/config';
 import { APP_GUARD } from '@nestjs/core';
+import { EventEmitterModule } from '@nestjs/event-emitter';
+import { BullModule } from '@nestjs/bullmq';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import * as Joi from 'joi';
 import appConfig from './config/app.config';
@@ -60,6 +62,21 @@ import { UploadsModule } from './modules/uploads/uploads.module';
         MAIL_FROM: Joi.string().email().default('noreply@apple-plus.com'),
       }),
       validationOptions: { abortEarly: false },
+    }),
+    EventEmitterModule.forRoot({ wildcard: false, maxListeners: 20 }),
+    BullModule.forRootAsync({
+      inject: [ConfigService],
+      useFactory: (config: ConfigService) => ({
+        connection: {
+          host: config.get<string>('redis.host', 'localhost'),
+          port: config.get<number>('redis.port', 6379),
+          password: config.get<string>('redis.password') || undefined,
+        },
+        defaultJobOptions: {
+          removeOnComplete: { age: 86_400 },
+          removeOnFail: { age: 7 * 86_400 },
+        },
+      }),
     }),
     ThrottlerModule.forRoot([{ ttl: 60_000, limit: 60 }]),
     DatabaseModule,

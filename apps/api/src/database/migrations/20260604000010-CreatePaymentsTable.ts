@@ -6,7 +6,7 @@ export class CreatePaymentsTable20260604000010 implements MigrationInterface {
   async up(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.query(`
       CREATE TYPE "payment_status_enum" AS ENUM (
-        'pending', 'processing', 'paid', 'failed', 'refunded', 'partially_refunded'
+        'pending', 'paid', 'failed', 'refunded', 'partially_refunded'
       )
     `);
 

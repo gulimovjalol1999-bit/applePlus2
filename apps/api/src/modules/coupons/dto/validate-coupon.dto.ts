@@ -1,10 +1,13 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsNumber, IsPositive, IsString, MaxLength } from 'class-validator';
+import { Transform } from 'class-transformer';
+import { IsNotEmpty, IsNumber, IsPositive, IsString, MaxLength } from 'class-validator';
 
 export class ValidateCouponDto {
-  @ApiProperty({ maxLength: 50 })
+  @ApiProperty({ maxLength: 50, example: 'SUMMER20' })
   @IsString()
+  @IsNotEmpty()
   @MaxLength(50)
+  @Transform(({ value }) => (typeof value === 'string' ? value.toUpperCase().trim() : value))
   code: string;
 
   @ApiProperty({ minimum: 0.01 })

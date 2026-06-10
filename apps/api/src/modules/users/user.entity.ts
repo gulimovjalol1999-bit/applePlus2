@@ -8,7 +8,7 @@ export class User extends BaseEntity {
   @Column({ length: 254, unique: true })
   email: string;
 
-  @Column({ length: 100 })
+  @Column({ length: 100, select: false })
   passwordHash: string;
 
   @Column({ length: 100 })
@@ -17,6 +17,7 @@ export class User extends BaseEntity {
   @Column({ length: 100 })
   lastName: string;
 
+  @Index({ unique: true, where: '"phone" IS NOT NULL' })
   @Column({ type: 'varchar', length: 30, nullable: true })
   phone: string | null;
 
@@ -26,7 +27,7 @@ export class User extends BaseEntity {
   @Column({ default: true })
   isActive: boolean;
 
-  @Column({ type: 'varchar', length: 500, nullable: true })
+  @Column({ type: 'varchar', length: 500, nullable: true, select: false })
   refreshTokenHash: string | null;
 
   @Column({ type: 'timestamptz', nullable: true })

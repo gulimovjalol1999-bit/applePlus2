@@ -21,13 +21,16 @@ export class SearchService {
       .createQueryBuilder('p')
       .leftJoinAndSelect('p.category', 'category')
       .leftJoinAndSelect('p.brand', 'brand')
+      .loadRelationCountAndMap('p.variantCount', 'p.variants')
       .where('p.deleted_at IS NULL')
       .andWhere('p.status = :status', { status: ProductStatus.ACTIVE });
 
-    if (query.q) {
+    const term = query.q?.trim();
+    if (term) {
+      const escaped = this.escapeLike(term);
       qb.andWhere(
-        '(p.name ILIKE :q OR p.short_description ILIKE :q OR :qTag = ANY(p.tags))',
-        { q: `%${query.q}%`, qTag: query.q },
+        '(p.name ILIKE :q OR p.short_description ILIKE :q OR EXISTS (SELECT 1 FROM unnest(p.tags) AS tag WHERE tag ILIKE :qTag))',
+        { q: `%${escaped}%`, qTag: escaped },
       );
     }
     if (query.categoryId) {
@@ -59,6 +62,10 @@ export class SearchService {
     };
   }
 
+  private escapeLike(value: string): string {
+    return value.replace(/[\\%_]/g, '\\$&');
+  }
+
   private toDto(p: Product): ProductResponseDto {
     return {
       id: p.id,
@@ -78,7 +85,8 @@ export class SearchService {
       metaDescription: p.metaDescription,
       averageRating: +p.averageRating,
       reviewCount: p.reviewCount,
-      variantCount: p.variants?.length ?? 0,
+      variantCount: (p as Product & { variantCount?: number }).variantCount
+        ?? (p.variants?.length ?? 0),
       createdAt: p.createdAt?.toISOString(),
       updatedAt: p.updatedAt?.toISOString(),
     };

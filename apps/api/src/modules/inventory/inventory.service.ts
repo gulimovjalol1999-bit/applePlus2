@@ -1,12 +1,13 @@
 import {
   Injectable,
+  InternalServerErrorException,
   NotFoundException,
   UnprocessableEntityException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DataSource, Repository, SelectQueryBuilder } from 'typeorm';
+import { DataSource, EntityManager, Repository, SelectQueryBuilder } from 'typeorm';
 import { InventoryItem } from './entities/inventory-item.entity';
-import { InventoryLog } from './entities/inventory-log.entity';
+import { InventoryEventType, InventoryLog } from './entities/inventory-log.entity';
 import { AdjustStockDto } from './dto/adjust-stock.dto';
 import { InventoryFilterDto } from './dto/inventory-filter.dto';
 import { UpdateInventoryDto } from './dto/update-inventory.dto';
@@ -61,6 +62,7 @@ export class InventoryService {
     variantId: string,
     dto: AdjustStockDto,
     performedById: string,
+    performedByEmail?: string,
   ): Promise<InventoryItemDto> {
     return this.dataSource.transaction(async (manager) => {
       // Row-level lock prevents concurrent adjustments overselling
@@ -93,11 +95,13 @@ export class InventoryService {
 
       const log = manager.create(InventoryLog, {
         inventoryItemId: item.id,
+        eventType: InventoryEventType.MANUAL,
         adjustment: dto.adjustment,
         quantityBefore,
         quantityAfter: newQuantity,
         reason: dto.reason,
         performedById,
+        performedByEmail: performedByEmail ?? null,
       });
       await manager.save(InventoryLog, log);
 
@@ -124,8 +128,11 @@ export class InventoryService {
   async reserveStock(
     variantId: string,
     qty: number,
-    manager = this.dataSource.manager,
+    manager: EntityManager,
+    reason = `Reserved ${qty} units`,
   ): Promise<void> {
+    this.assertTransaction(manager, 'reserveStock');
+
     const item = await manager
       .createQueryBuilder(InventoryItem, 'inv')
       .setLock('pessimistic_write')
@@ -141,13 +148,29 @@ export class InventoryService {
 
     item.reservedQuantity += qty;
     await manager.save(InventoryItem, item);
+
+    await manager.save(
+      InventoryLog,
+      manager.create(InventoryLog, {
+        inventoryItemId: item.id,
+        eventType: InventoryEventType.ORDER_RESERVE,
+        adjustment: qty,
+        quantityBefore: item.quantity,
+        quantityAfter: item.quantity,
+        reason,
+        performedById: null,
+      }),
+    );
   }
 
   async releaseReservation(
     variantId: string,
     qty: number,
-    manager = this.dataSource.manager,
+    manager: EntityManager,
+    reason = `Released ${qty} units reservation`,
   ): Promise<void> {
+    this.assertTransaction(manager, 'releaseReservation');
+
     const item = await manager
       .createQueryBuilder(InventoryItem, 'inv')
       .setLock('pessimistic_write')
@@ -158,13 +181,29 @@ export class InventoryService {
 
     item.reservedQuantity = Math.max(0, item.reservedQuantity - qty);
     await manager.save(InventoryItem, item);
+
+    await manager.save(
+      InventoryLog,
+      manager.create(InventoryLog, {
+        inventoryItemId: item.id,
+        eventType: InventoryEventType.ORDER_RELEASE,
+        adjustment: -qty,
+        quantityBefore: item.quantity,
+        quantityAfter: item.quantity,
+        reason,
+        performedById: null,
+      }),
+    );
   }
 
   async commitSale(
     variantId: string,
     qty: number,
-    manager = this.dataSource.manager,
+    manager: EntityManager,
+    reason = `Committed sale of ${qty} units`,
   ): Promise<void> {
+    this.assertTransaction(manager, 'commitSale');
+
     const item = await manager
       .createQueryBuilder(InventoryItem, 'inv')
       .setLock('pessimistic_write')
@@ -173,10 +212,32 @@ export class InventoryService {
 
     if (!item) throw new NotFoundException(`Inventory not found for variant ${variantId}`);
 
+    const quantityBefore = item.quantity;
     item.quantity = Math.max(0, item.quantity - qty);
     item.reservedQuantity = Math.max(0, item.reservedQuantity - qty);
     item.soldCount += qty;
     await manager.save(InventoryItem, item);
+
+    await manager.save(
+      InventoryLog,
+      manager.create(InventoryLog, {
+        inventoryItemId: item.id,
+        eventType: InventoryEventType.ORDER_COMMIT,
+        adjustment: -qty,
+        quantityBefore,
+        quantityAfter: item.quantity,
+        reason,
+        performedById: null,
+      }),
+    );
+  }
+
+  private assertTransaction(manager: EntityManager, caller: string): void {
+    if (!manager.queryRunner?.isTransactionActive) {
+      throw new InternalServerErrorException(
+        `${caller}() must be called within an active database transaction`,
+      );
+    }
   }
 
   // ─── helpers ──────────────────────────────────────────────────────────────
@@ -203,7 +264,7 @@ export class InventoryService {
     }
 
     if (filter.lowStock) {
-      qb.andWhere('inv.quantity <= inv.reorder_level');
+      qb.andWhere('(inv.quantity - inv.reserved_quantity) <= inv.reorder_level');
     }
 
     if (filter.outOfStock) {

@@ -31,7 +31,7 @@ export class OrdersController {
   @ApiCreatedResponse({ type: OrderResponseDto })
   create(
     @Body() dto: CreateOrderDto,
-    @CurrentUser() user: { id: string; role: Role },
+    @CurrentUser() user: { id: string; email: string; role: Role },
   ) {
     return this.ordersService.create(dto, user);
   }

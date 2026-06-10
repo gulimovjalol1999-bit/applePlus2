@@ -1,8 +1,9 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import {
+  ArrayMaxSize,
+  ArrayMinSize,
   IsArray,
   IsInt,
-  IsNumber,
   IsOptional,
   IsString,
   IsUUID,
@@ -10,7 +11,7 @@ import {
   Min,
   ValidateNested,
 } from 'class-validator';
-import { Type } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
 
 export class CreateOrderItemDto {
   @ApiProperty({ description: 'Product variant UUID' })
@@ -26,21 +27,18 @@ export class CreateOrderItemDto {
 export class CreateOrderDto {
   @ApiProperty({ type: [CreateOrderItemDto] })
   @IsArray()
+  @ArrayMinSize(1)
+  @ArrayMaxSize(100)
   @ValidateNested({ each: true })
   @Type(() => CreateOrderItemDto)
   items: CreateOrderItemDto[];
 
-  @ApiPropertyOptional({ default: 0 })
+  @ApiPropertyOptional({ example: 'SUMMER20', description: 'Coupon code — discount calculated server-side' })
   @IsOptional()
-  @IsNumber({ maxDecimalPlaces: 2 })
-  @Min(0)
-  discountAmount?: number;
-
-  @ApiPropertyOptional({ default: 0 })
-  @IsOptional()
-  @IsNumber({ maxDecimalPlaces: 2 })
-  @Min(0)
-  shippingAmount?: number;
+  @IsString()
+  @MaxLength(50)
+  @Transform(({ value }) => (typeof value === 'string' ? value.toUpperCase().trim() : value))
+  couponCode?: string;
 
   @ApiPropertyOptional({ maxLength: 1000 })
   @IsOptional()

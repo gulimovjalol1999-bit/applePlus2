@@ -47,25 +47,29 @@ export class CouponsService {
   }
 
   async create(dto: CreateCouponDto): Promise<CouponResponseDto> {
-    const existing = await this.repo.findOne({ where: { code: dto.code.toUpperCase() } });
+    const existing = await this.repo.findOne({ where: { code: dto.code } });
     if (existing) throw new ConflictException(`Coupon code "${dto.code}" already exists`);
 
     const coupon = this.repo.create({
       ...dto,
-      code: dto.code.toUpperCase(),
       isActive: dto.isActive ?? true,
     });
     const saved = await this.repo.save(coupon);
-    return this.findOne(saved.id);
+    return this.toDto(saved);
   }
 
   async update(id: string, dto: UpdateCouponDto): Promise<CouponResponseDto> {
     const coupon = await this.repo.findOne({ where: { id } });
     if (!coupon) throw new NotFoundException(`Coupon ${id} not found`);
-    if (dto.code) dto.code = dto.code.toUpperCase();
+
+    if (dto.code && dto.code !== coupon.code) {
+      const conflict = await this.repo.findOne({ where: { code: dto.code } });
+      if (conflict) throw new ConflictException(`Coupon code "${dto.code}" already exists`);
+    }
+
     Object.assign(coupon, dto);
     await this.repo.save(coupon);
-    return this.findOne(id);
+    return this.toDto(coupon);
   }
 
   async remove(id: string): Promise<void> {
@@ -76,7 +80,7 @@ export class CouponsService {
 
   async validate(dto: ValidateCouponDto): Promise<CouponValidationResponseDto> {
     const coupon = await this.repo.findOne({
-      where: { code: dto.code.toUpperCase(), isActive: true },
+      where: { code: dto.code, isActive: true },
     });
 
     if (!coupon) throw new NotFoundException(`Coupon "${dto.code}" not found or inactive`);
@@ -99,7 +103,11 @@ export class CouponsService {
 
     let discount: number;
     if (coupon.type === CouponType.PERCENT) {
-      discount = +(dto.orderAmount * (+coupon.value / 100)).toFixed(2);
+      const pct = +coupon.value;
+      if (pct > 100) {
+        throw new UnprocessableEntityException('Invalid percent coupon: value exceeds 100%');
+      }
+      discount = +(dto.orderAmount * (pct / 100)).toFixed(2);
     } else {
       discount = Math.min(+coupon.value, dto.orderAmount);
     }
@@ -109,6 +117,10 @@ export class CouponsService {
       discount,
       finalAmount: +(dto.orderAmount - discount).toFixed(2),
     };
+  }
+
+  async incrementUsedCount(id: string): Promise<void> {
+    await this.repo.increment({ id }, 'usedCount', 1);
   }
 
   private toDto(coupon: Coupon): CouponResponseDto {
@@ -123,7 +135,8 @@ export class CouponsService {
       isActive: coupon.isActive,
       startsAt: coupon.startsAt?.toISOString() ?? null,
       expiresAt: coupon.expiresAt?.toISOString() ?? null,
-      createdAt: coupon.createdAt?.toISOString(),
+      createdAt: coupon.createdAt.toISOString(),
+      updatedAt: coupon.updatedAt.toISOString(),
     };
   }
 }

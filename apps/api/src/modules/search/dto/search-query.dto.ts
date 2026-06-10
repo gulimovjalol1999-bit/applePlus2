@@ -1,12 +1,15 @@
-import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsNumber, IsOptional, IsPositive, IsString, IsUUID } from 'class-validator';
-import { Type } from 'class-transformer';
+import { ApiPropertyOptional } from '@nestjs/swagger';
+import { IsNumber, IsOptional, IsPositive, IsString, IsUUID, MaxLength } from 'class-validator';
+import { Transform, Type } from 'class-transformer';
 import { PaginationDto } from '../../../common/dto/pagination.dto';
 
 export class SearchQueryDto extends PaginationDto {
-  @ApiProperty({ description: 'Search term' })
+  @ApiPropertyOptional({ description: 'Search term' })
   @IsString()
-  q: string;
+  @IsOptional()
+  @MaxLength(200)
+  @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
+  q?: string;
 
   @ApiPropertyOptional()
   @IsUUID()

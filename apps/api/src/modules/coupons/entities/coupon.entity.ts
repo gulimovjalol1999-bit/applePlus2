@@ -12,6 +12,7 @@ export enum CouponType {
 
 @Check('"value" > 0')
 @Check('"used_count" >= 0')
+@Check('"max_uses" IS NULL OR "max_uses" > 0')
 @Entity('coupons')
 export class Coupon extends BaseEntity {
   @Column({ length: 50, unique: true })
@@ -20,7 +21,7 @@ export class Coupon extends BaseEntity {
   @Column({ type: 'enum', enum: CouponType })
   type: CouponType;
 
-  @Column({ type: 'decimal', precision: 10, scale: 2 })
+  @Column({ type: 'decimal', precision: 12, scale: 2 })
   value: number;
 
   @Column({ type: 'decimal', precision: 12, scale: 2, nullable: true })

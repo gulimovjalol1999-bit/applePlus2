@@ -15,9 +15,11 @@ import {
   ApiBearerAuth,
   ApiCreatedResponse,
   ApiNoContentResponse,
+  ApiNotFoundResponse,
   ApiOkResponse,
   ApiOperation,
   ApiTags,
+  ApiUnprocessableEntityResponse,
 } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
@@ -85,8 +87,11 @@ export class CouponsController {
   }
 
   @Post('validate')
+  @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Validate and calculate coupon discount' })
   @ApiOkResponse({ type: CouponValidationResponseDto })
+  @ApiNotFoundResponse({ description: 'Coupon not found or inactive' })
+  @ApiUnprocessableEntityResponse({ description: 'Coupon expired, not yet active, usage limit reached, or order amount below minimum' })
   validate(@Body() dto: ValidateCouponDto) {
     return this.couponsService.validate(dto);
   }

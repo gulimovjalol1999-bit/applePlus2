@@ -25,13 +25,13 @@ export class BrandsService {
   ): Promise<{ data: BrandResponseDto[]; meta: PaginatedMeta }> {
     const qb = this.repo
       .createQueryBuilder('b')
-      .where('b.deleted_at IS NULL');
+      .where('b.deletedAt IS NULL');
 
     if (filter.search) {
       qb.andWhere('b.name ILIKE :search', { search: `%${filter.search}%` });
     }
     if (filter.isActive !== undefined) {
-      qb.andWhere('b.is_active = :isActive', { isActive: filter.isActive });
+      qb.andWhere('b.isActive = :isActive', { isActive: filter.isActive });
     }
 
     qb.orderBy('b.name', 'ASC');
@@ -56,9 +56,9 @@ export class BrandsService {
   }
 
   async create(dto: CreateBrandDto, createdById?: string): Promise<BrandResponseDto> {
-    const slug = await this.uniqueSlug(dto.name);
     const existing = await this.repo.findOne({ where: { name: dto.name } });
     if (existing) throw new ConflictException(`Brand name "${dto.name}" already exists`);
+    const slug = await this.uniqueSlug(dto.name);
 
     const brand = this.repo.create({
       ...dto,
@@ -112,8 +112,8 @@ export class BrandsService {
       logoUrl: brand.logoUrl,
       websiteUrl: brand.websiteUrl,
       isActive: brand.isActive,
-      createdAt: brand.createdAt?.toISOString(),
-      updatedAt: brand.updatedAt?.toISOString(),
+      createdAt: brand.createdAt.toISOString(),
+      updatedAt: brand.updatedAt.toISOString(),
     };
   }
 }

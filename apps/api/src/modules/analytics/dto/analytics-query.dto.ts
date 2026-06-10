@@ -1,6 +1,35 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
-import { IsDateString, IsInt, IsOptional, Max, Min } from 'class-validator';
+import {
+  IsDateString,
+  IsInt,
+  IsOptional,
+  Max,
+  Min,
+  registerDecorator,
+  ValidationArguments,
+  ValidationOptions,
+} from 'class-validator';
+
+function IsAfterOrEqual(property: string, options?: ValidationOptions) {
+  return (object: object, propertyName: string) => {
+    registerDecorator({
+      name: 'isAfterOrEqual',
+      target: (object as any).constructor,
+      propertyName,
+      constraints: [property],
+      options: { message: `${propertyName} must be >= ${property}`, ...options },
+      validator: {
+        validate(value: unknown, args: ValidationArguments) {
+          const [relatedProp] = args.constraints as [string];
+          const related = (args.object as Record<string, unknown>)[relatedProp];
+          if (!value || !related) return true;
+          return String(value) >= String(related);
+        },
+      },
+    });
+  };
+}
 
 export class DateRangeDto {
   @ApiPropertyOptional({ example: '2026-01-01', description: 'ISO date (inclusive)' })
@@ -11,6 +40,7 @@ export class DateRangeDto {
   @ApiPropertyOptional({ example: '2026-12-31', description: 'ISO date (inclusive)' })
   @IsOptional()
   @IsDateString()
+  @IsAfterOrEqual('startDate')
   endDate?: string;
 }
 

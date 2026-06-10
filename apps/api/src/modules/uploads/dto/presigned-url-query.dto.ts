@@ -1,5 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsString, IsNotEmpty, Matches, IsOptional, IsIn } from 'class-validator';
+import { IsString, IsNotEmpty, Matches, IsOptional, IsIn, IsInt, Min, Max } from 'class-validator';
+import { MAX_FILE_SIZE } from '../uploads.constants';
 
 const ALLOWED_FOLDERS = ['images', 'avatars', 'documents'] as const;
 type UploadFolder = (typeof ALLOWED_FOLDERS)[number];
@@ -26,4 +27,15 @@ export class PresignedUrlQueryDto {
   @IsOptional()
   @IsIn(ALLOWED_FOLDERS)
   folder?: UploadFolder = 'images';
+
+  @ApiProperty({
+    example: 1048576,
+    description:
+      'Exact size of the file in bytes. The upload URL is signed to require this exact ' +
+      'Content-Length, so uploads larger than the configured limit are rejected by storage.',
+  })
+  @IsInt()
+  @Min(1)
+  @Max(MAX_FILE_SIZE)
+  contentLength: number;
 }

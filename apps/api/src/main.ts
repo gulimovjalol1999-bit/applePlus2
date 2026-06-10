@@ -1,6 +1,7 @@
 import { NestFactory } from '@nestjs/core';
 import { Logger, ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { IoAdapter } from '@nestjs/platform-socket.io';
 import helmet from 'helmet';
 import { AppModule } from './app.module';
 import { GlobalExceptionFilter } from './common/exceptions/http-exception.filter';
@@ -10,7 +11,8 @@ import { ResponseTransformInterceptor } from './common/interceptors/response-tra
 import { setupSwagger } from './swagger/swagger.config';
 
 async function bootstrap(): Promise<void> {
-  const app = await NestFactory.create(AppModule, { bufferLogs: true });
+  // rawBody: true makes req.rawBody available for webhook HMAC signature verification
+  const app = await NestFactory.create(AppModule, { bufferLogs: true, rawBody: true });
 
   const config = app.get(ConfigService);
   const port = config.get<number>('app.port') ?? 3000;
@@ -50,6 +52,9 @@ async function bootstrap(): Promise<void> {
     origin: nodeEnv === 'production' ? appUrl : '*',
     credentials: true,
   });
+
+  // WebSocket adapter (socket.io)
+  app.useWebSocketAdapter(new IoAdapter(app));
 
   setupSwagger(app);
 

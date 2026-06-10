@@ -6,6 +6,10 @@ export class CreateReviewDto {
   @IsUUID()
   productId: string;
 
+  @ApiProperty({ description: 'The delivered order that includes this product' })
+  @IsUUID()
+  orderId: string;
+
   @ApiProperty({ minimum: 1, maximum: 5 })
   @IsInt()
   @Min(1)
@@ -21,6 +25,7 @@ export class CreateReviewDto {
 
   @ApiPropertyOptional()
   @IsString()
+  @IsNotEmpty()
   @IsOptional()
   body?: string;
 }

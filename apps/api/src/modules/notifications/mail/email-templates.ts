@@ -1,3 +1,5 @@
+import { escapeHtml, sanitizeUrl } from '../../../common/utils/escape-html.util';
+
 const BASE_STYLE = `
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   background: #f5f5f7;
@@ -26,7 +28,7 @@ const FOOTER = `
   <div style="padding:24px 40px;text-align:center;border-top:1px solid #e8e8ed;">
     <p style="margin:0;font-size:12px;color:#86868b;">
       Apple Plus — Premium Electronics Store<br/>
-      <a href="#" style="color:#0071e3;text-decoration:none;">Unsubscribe</a>
+      <a href="https://apple-plus.com/unsubscribe" style="color:#0071e3;text-decoration:none;">Unsubscribe</a>
     </p>
   </div>
 `;
@@ -48,10 +50,11 @@ function wrap(content: string): string {
 }
 
 export function welcomeTemplate(firstName: string): string {
+  const name = escapeHtml(firstName);
   return wrap(`
     <div style="padding:40px;">
       <h1 style="margin:0 0 8px;font-size:26px;font-weight:700;color:#1d1d1f;">
-        Welcome, ${firstName}!
+        Welcome, ${name}!
       </h1>
       <p style="margin:0 0 24px;font-size:16px;color:#515154;line-height:1.6;">
         Your Apple Plus account has been created. You can now shop the latest Apple
@@ -77,15 +80,19 @@ export function orderConfirmationTemplate(params: {
   total: number;
   shippingAddress: string;
 }): string {
+  const firstName = escapeHtml(params.firstName);
+  const orderNumber = escapeHtml(params.orderNumber);
+  const shippingAddress = escapeHtml(params.shippingAddress);
+
   const rows = params.items
     .map(
       (item) => `
       <tr>
         <td style="padding:10px 0;font-size:14px;color:#1d1d1f;border-bottom:1px solid #f0f0f0;">
-          ${item.name}
+          ${escapeHtml(item.name)}
         </td>
         <td style="padding:10px 0;font-size:14px;color:#515154;text-align:center;border-bottom:1px solid #f0f0f0;">
-          ×${item.quantity}
+          ×${escapeHtml(item.quantity)}
         </td>
         <td style="padding:10px 0;font-size:14px;color:#1d1d1f;text-align:right;border-bottom:1px solid #f0f0f0;">
           $${(item.price * item.quantity).toFixed(2)}
@@ -102,10 +109,10 @@ export function orderConfirmationTemplate(params: {
         Order Confirmed
       </div>
       <h1 style="margin:0 0 6px;font-size:24px;font-weight:700;color:#1d1d1f;">
-        Thank you, ${params.firstName}!
+        Thank you, ${firstName}!
       </h1>
       <p style="margin:0 0 28px;font-size:15px;color:#515154;">
-        Order <strong>#${params.orderNumber}</strong> has been received and is being processed.
+        Order <strong>#${orderNumber}</strong> has been received and is being processed.
       </p>
 
       <table style="width:100%;border-collapse:collapse;">
@@ -141,10 +148,10 @@ export function orderConfirmationTemplate(params: {
       <div style="margin-top:28px;padding:16px 20px;background:#f5f5f7;border-radius:12px;">
         <p style="margin:0;font-size:12px;font-weight:600;color:#86868b;text-transform:uppercase;
                   letter-spacing:0.5px;">Shipping to</p>
-        <p style="margin:4px 0 0;font-size:14px;color:#1d1d1f;">${params.shippingAddress}</p>
+        <p style="margin:4px 0 0;font-size:14px;color:#1d1d1f;">${shippingAddress}</p>
       </div>
 
-      <a href="https://apple-plus.com/orders/${params.orderNumber}"
+      <a href="https://apple-plus.com/orders/${orderNumber}"
          style="display:inline-block;margin-top:28px;background:#0071e3;color:#fff;font-size:14px;
                 font-weight:600;padding:14px 32px;border-radius:980px;text-decoration:none;">
         Track Your Order
@@ -162,12 +169,16 @@ export function orderStatusTemplate(params: {
   const statusColors: Record<string, string> = {
     processing: '#0071e3',
     confirmed: '#1a7f37',
-    shipped: '#7d4aff',
+    shipping: '#7d4aff',
     delivered: '#1a7f37',
     cancelled: '#d93025',
     refunded: '#d93025',
   };
 
+  const firstName = escapeHtml(params.firstName);
+  const orderNumber = escapeHtml(params.orderNumber);
+  const status = escapeHtml(params.status);
+  const statusMessage = escapeHtml(params.statusMessage);
   const color = statusColors[params.status.toLowerCase()] ?? '#515154';
 
   return wrap(`
@@ -176,14 +187,14 @@ export function orderStatusTemplate(params: {
         Order Update
       </h1>
       <p style="margin:0 0 20px;font-size:15px;color:#515154;">
-        Hi ${params.firstName}, here's an update on your order <strong>#${params.orderNumber}</strong>.
+        Hi ${firstName}, here's an update on your order <strong>#${orderNumber}</strong>.
       </p>
       <div style="padding:20px 24px;border-left:4px solid ${color};background:#f9f9fb;border-radius:0 12px 12px 0;">
         <p style="margin:0;font-size:13px;font-weight:600;color:${color};text-transform:uppercase;
-                  letter-spacing:0.5px;">${params.status}</p>
-        <p style="margin:6px 0 0;font-size:15px;color:#1d1d1f;">${params.statusMessage}</p>
+                  letter-spacing:0.5px;">${status}</p>
+        <p style="margin:6px 0 0;font-size:15px;color:#1d1d1f;">${statusMessage}</p>
       </div>
-      <a href="https://apple-plus.com/orders/${params.orderNumber}"
+      <a href="https://apple-plus.com/orders/${orderNumber}"
          style="display:inline-block;margin-top:28px;background:#0071e3;color:#fff;font-size:14px;
                 font-weight:600;padding:14px 32px;border-radius:980px;text-decoration:none;">
         View Order Details
@@ -197,22 +208,26 @@ export function passwordResetTemplate(params: {
   resetUrl: string;
   expiresInMinutes: number;
 }): string {
+  const firstName = escapeHtml(params.firstName);
+  const resetUrl = sanitizeUrl(params.resetUrl);
+  const minutes = Math.floor(params.expiresInMinutes);
+
   return wrap(`
     <div style="padding:40px;">
       <h1 style="margin:0 0 8px;font-size:24px;font-weight:700;color:#1d1d1f;">
         Reset Your Password
       </h1>
       <p style="margin:0 0 24px;font-size:15px;color:#515154;line-height:1.6;">
-        Hi ${params.firstName}, we received a request to reset the password for your Apple Plus account.
+        Hi ${firstName}, we received a request to reset the password for your Apple Plus account.
         Click the button below to choose a new password.
       </p>
-      <a href="${params.resetUrl}"
+      <a href="${resetUrl}"
          style="display:inline-block;background:#0071e3;color:#fff;font-size:14px;
                 font-weight:600;padding:14px 32px;border-radius:980px;text-decoration:none;">
         Reset Password
       </a>
       <p style="margin:24px 0 0;font-size:13px;color:#86868b;">
-        This link expires in ${params.expiresInMinutes} minutes.
+        This link expires in ${minutes} minutes.
         If you didn't request a password reset, you can safely ignore this email.
       </p>
     </div>

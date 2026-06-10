@@ -11,8 +11,11 @@ export class Order extends BaseEntity {
   @Column({ length: 30, unique: true })
   orderNumber: string;
 
+  @Column({ type: 'uuid' })
+  userId: string;
+
   @Column({ type: 'uuid', nullable: true })
-  userId: string | null;
+  couponId: string | null;
 
   @Column({ type: 'enum', enum: OrderStatus, default: OrderStatus.NEW })
   status: OrderStatus;

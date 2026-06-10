@@ -42,7 +42,7 @@ export class AnalyticsService {
     return rows.map((r) => ({
       date: r.date,
       orderCount: Number(r.order_count),
-      revenue: Number(r.revenue),
+      revenue: r.revenue,
     }));
   }
 
@@ -75,7 +75,7 @@ export class AnalyticsService {
       year: Number(r.year),
       month: Number(r.month),
       orderCount: Number(r.order_count),
-      revenue: Number(r.revenue),
+      revenue: r.revenue,
     }));
   }
 
@@ -113,7 +113,7 @@ export class AnalyticsService {
       productId: r.product_id,
       productName: r.product_name,
       totalQuantity: Number(r.total_quantity),
-      totalRevenue: Number(r.total_revenue),
+      totalRevenue: r.total_revenue,
     }));
   }
 
@@ -136,11 +136,10 @@ export class AnalyticsService {
       FROM order_items oi
       INNER JOIN orders       o  ON o.id  = oi.order_id
       INNER JOIN products     p  ON p.id  = oi.product_id
-      INNER JOIN categories   c  ON c.id  = p.category_id
+      INNER JOIN categories   c  ON c.id  = p.category_id AND c.deleted_at IS NULL
       WHERE o.status <> $1
         AND o.deleted_at IS NULL
         AND oi.deleted_at IS NULL
-        AND p.deleted_at IS NULL
         AND o.created_at >= $2::date
         AND o.created_at <  ($3::date + INTERVAL '1 day')
       GROUP BY p.category_id, c.name
@@ -154,7 +153,7 @@ export class AnalyticsService {
       categoryId: r.category_id,
       categoryName: r.category_name,
       totalQuantity: Number(r.total_quantity),
-      totalRevenue: Number(r.total_revenue),
+      totalRevenue: r.total_revenue,
     }));
   }
 
@@ -162,10 +161,13 @@ export class AnalyticsService {
     start?: string,
     end?: string,
   ): { startDate: string; endDate: string } {
-    const today = new Date().toISOString().slice(0, 10);
+    const today = new Date();
+    const todayStr = today.toISOString().slice(0, 10);
+    const thirtyDaysAgo = new Date(today);
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
     return {
-      startDate: start ?? '2000-01-01',
-      endDate: end ?? today,
+      startDate: start ?? thirtyDaysAgo.toISOString().slice(0, 10),
+      endDate: end ?? todayStr,
     };
   }
 }

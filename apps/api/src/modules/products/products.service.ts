@@ -1,9 +1,11 @@
 import {
+  BadRequestException,
+  ConflictException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { DataSource, QueryFailedError, Repository } from 'typeorm';
 import { Product } from './entities/product.entity';
 import { ProductVariant } from './entities/product-variant.entity';
 import { Category } from '../categories/category.entity';
@@ -25,6 +27,7 @@ export class ProductsService {
     private readonly productRepo: Repository<Product>,
     @InjectRepository(ProductVariant)
     private readonly variantRepo: Repository<ProductVariant>,
+    private readonly dataSource: DataSource,
   ) {}
 
   async findAll(
@@ -49,18 +52,20 @@ export class ProductsService {
     if (filter.brandId) {
       qb.andWhere('p.brand_id = :brandId', { brandId: filter.brandId });
     }
-    if (filter.status) {
-      qb.andWhere('p.status = :status', { status: filter.status });
-    }
+    // Always filter by status — default to ACTIVE so unauthenticated callers
+    // cannot enumerate DRAFT / ARCHIVED products via the public list endpoint.
+    qb.andWhere('p.status = :status', {
+      status: filter.status ?? ProductStatus.ACTIVE,
+    });
 
     const sortCol: Record<string, string> = {
       name: 'p.name',
-      basePrice: 'p.base_price',
-      createdAt: 'p.created_at',
-      averageRating: 'p.average_rating',
+      basePrice: 'p.basePrice',
+      createdAt: 'p.createdAt',
+      averageRating: 'p.averageRating',
     };
     qb.orderBy(
-      sortCol[filter.sortBy ?? 'createdAt'] ?? 'p.created_at',
+      sortCol[filter.sortBy ?? 'createdAt'] ?? 'p.createdAt',
       filter.sortOrder ?? 'DESC',
     );
 
@@ -82,7 +87,7 @@ export class ProductsService {
 
   async findOne(id: string): Promise<ProductResponseDto> {
     const product = await this.productRepo.findOne({
-      where: { id },
+      where: { id, status: ProductStatus.ACTIVE },
       relations: ['category', 'brand', 'variants', 'images'],
     });
     if (!product) throw new NotFoundException(`Product ${id} not found`);
@@ -91,10 +96,20 @@ export class ProductsService {
 
   async findBySlug(slug: string): Promise<ProductResponseDto> {
     const product = await this.productRepo.findOne({
-      where: { slug },
+      where: { slug, status: ProductStatus.ACTIVE },
       relations: ['category', 'brand', 'variants', 'images'],
     });
     if (!product) throw new NotFoundException(`Product '${slug}' not found`);
+    return this.toDto(product);
+  }
+
+  // Used internally after mutations (no status filter — admin ops work on any status).
+  private async loadProductById(id: string): Promise<ProductResponseDto> {
+    const product = await this.productRepo.findOne({
+      where: { id },
+      relations: ['category', 'brand', 'variants', 'images'],
+    });
+    if (!product) throw new NotFoundException(`Product ${id} not found`);
     return this.toDto(product);
   }
 
@@ -108,8 +123,12 @@ export class ProductsService {
       createdById: createdById ?? null,
       updatedById: createdById ?? null,
     });
-    const saved = await this.productRepo.save(product);
-    return this.findOne(saved.id);
+    try {
+      const saved = await this.productRepo.save(product);
+      return this.loadProductById(saved.id);
+    } catch (err) {
+      return this.rethrowDbError(err);
+    }
   }
 
   async update(
@@ -129,8 +148,12 @@ export class ProductsService {
       updatedById: updatedById ?? product.updatedById,
     });
 
-    await this.productRepo.save(product);
-    return this.findOne(id);
+    try {
+      await this.productRepo.save(product);
+    } catch (err) {
+      return this.rethrowDbError(err);
+    }
+    return this.loadProductById(id);
   }
 
   async updateStatus(id: string, status: ProductStatus): Promise<ProductResponseDto> {
@@ -138,13 +161,22 @@ export class ProductsService {
     if (!product) throw new NotFoundException(`Product ${id} not found`);
     product.status = status;
     await this.productRepo.save(product);
-    return this.findOne(id);
+    return this.loadProductById(id);
   }
 
   async remove(id: string): Promise<void> {
     const product = await this.productRepo.findOne({ where: { id } });
     if (!product) throw new NotFoundException(`Product ${id} not found`);
     await this.productRepo.softDelete(id);
+  }
+
+  private rethrowDbError(err: unknown): never {
+    if (err instanceof QueryFailedError) {
+      const code = (err as unknown as { code: string }).code;
+      if (code === '23505') throw new ConflictException('A product with this slug already exists');
+      if (code === '23503') throw new BadRequestException('Invalid category or brand ID');
+    }
+    throw err;
   }
 
   private async uniqueSlug(name: string, excludeId?: string): Promise<string> {

@@ -28,24 +28,37 @@ import { ParseUuidPipe } from '../../common/pipes/parse-uuid.pipe';
 import { ReviewsService } from './reviews.service';
 import { CreateReviewDto } from './dto/create-review.dto';
 import { ReviewFilterDto } from './dto/review-filter.dto';
-import { ReviewResponseDto } from './dto/review-response.dto';
+import { PublicReviewResponseDto, ReviewResponseDto } from './dto/review-response.dto';
 
 @ApiTags('Reviews')
 @Controller('reviews')
 export class ReviewsController {
   constructor(private readonly reviewsService: ReviewsService) {}
 
+  // Public: always returns approved reviews only; the isApproved filter from
+  // ReviewFilterDto is intentionally ignored here to prevent leaking pending reviews.
   @Get()
-  @ApiOperation({ summary: 'List reviews (filter by productId, isApproved)' })
-  @ApiOkResponse({ type: ReviewResponseDto, isArray: true })
+  @ApiOperation({ summary: 'List approved reviews (public)' })
+  @ApiOkResponse({ type: PublicReviewResponseDto, isArray: true })
   findAll(@Query() filter: ReviewFilterDto) {
     return this.reviewsService.findAll(filter);
+  }
+
+  // Admin: returns unapproved reviews awaiting moderation.
+  @Get('pending')
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.OWNER, Role.MANAGER)
+  @ApiOperation({ summary: 'List unapproved reviews pending moderation (admin)' })
+  @ApiOkResponse({ type: ReviewResponseDto, isArray: true })
+  findPending(@Query() filter: ReviewFilterDto) {
+    return this.reviewsService.findPending(filter);
   }
 
   @Post()
   @ApiBearerAuth()
   @UseGuards(JwtAuthGuard)
-  @ApiOperation({ summary: 'Create a review (authenticated)' })
+  @ApiOperation({ summary: 'Submit a review — requires a delivered order containing the product' })
   @ApiCreatedResponse({ type: ReviewResponseDto })
   create(
     @Body() dto: CreateReviewDto,

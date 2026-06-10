@@ -13,6 +13,7 @@ export class CouponResponseDto {
   @ApiPropertyOptional({ nullable: true }) startsAt: string | null;
   @ApiPropertyOptional({ nullable: true }) expiresAt: string | null;
   @ApiProperty() createdAt: string;
+  @ApiProperty() updatedAt: string;
 }
 
 export class CouponValidationResponseDto {

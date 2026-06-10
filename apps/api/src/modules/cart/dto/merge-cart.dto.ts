@@ -1,9 +1,9 @@
-import { ApiPropertyOptional } from '@nestjs/swagger';
-import { IsOptional, IsString } from 'class-validator';
+import { ApiProperty } from '@nestjs/swagger';
+import { IsNotEmpty, IsString } from 'class-validator';
 
 export class MergeCartDto {
-  @ApiPropertyOptional({ description: 'Guest session ID to merge into user cart' })
+  @ApiProperty({ description: 'Guest session ID to merge into user cart' })
   @IsString()
-  @IsOptional()
-  sessionId?: string;
+  @IsNotEmpty()
+  sessionId: string;
 }

@@ -68,9 +68,9 @@ export class InventoryController {
   adjustStock(
     @Param('variantId', ParseUuidPipe) variantId: string,
     @Body() dto: AdjustStockDto,
-    @CurrentUser() user: { id: string },
+    @CurrentUser() user: { id: string; email: string },
   ) {
-    return this.inventoryService.adjustStock(variantId, dto, user?.id);
+    return this.inventoryService.adjustStock(variantId, dto, user?.id, user?.email);
   }
 
   @Patch(':variantId')

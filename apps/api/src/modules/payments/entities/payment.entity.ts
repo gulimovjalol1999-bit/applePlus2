@@ -2,6 +2,7 @@ import {
   Check,
   Column,
   Entity,
+  Index,
   JoinColumn,
   ManyToOne,
 } from 'typeorm';
@@ -31,7 +32,7 @@ export class Payment extends BaseEntity {
   @Column({ type: 'decimal', precision: 12, scale: 2 })
   amount: number;
 
-  @Column({ length: 10, default: 'USD' })
+  @Column({ length: 3, default: 'USD' })
   currency: string;
 
   @Column({ type: 'jsonb', default: '{}' })
@@ -39,4 +40,9 @@ export class Payment extends BaseEntity {
 
   @Column({ type: 'timestamptz', nullable: true })
   paidAt: Date | null;
+
+  // Prevents duplicate charges on retried requests
+  @Index({ unique: true })
+  @Column({ type: 'varchar', length: 64 })
+  idempotencyKey: string;
 }

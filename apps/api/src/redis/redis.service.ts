@@ -54,9 +54,31 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
     await this.client.del(key);
   }
 
-  /** Pattern bo'yicha bir nechta kalitlarni o'chirish, masalan: "products:*" */
+  /**
+   * Pattern bo'yicha kalitlarni o'chirish.
+   * SCAN + cursor bilan ishlaydi — KEYS dan farqli o'laroq Redis event loop'ni
+   * bloklamaydi va millionlab kalitli production dataset'da xavfsiz.
+   */
   async delByPattern(pattern: string): Promise<void> {
-    const keys = await this.client.keys(pattern);
-    if (keys.length) await this.client.del(...keys);
+    let cursor = '0';
+    do {
+      const [next, keys] = await this.client.scan(
+        cursor,
+        'MATCH', pattern,
+        'COUNT', 200,
+      );
+      cursor = next;
+      if (keys.length > 0) {
+        // Bitta DEL buyrug'i — round-trip minimallashtirilgan
+        await this.client.del(...(keys as [string, ...string[]]));
+      }
+    } while (cursor !== '0');
+  }
+
+  // ── Health check ──────────────────────────────────────────────────────────
+
+  async ping(): Promise<void> {
+    const result = await this.client.ping();
+    if (result !== 'PONG') throw new Error(`Unexpected Redis PING response: ${result}`);
   }
 }

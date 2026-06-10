@@ -36,6 +36,10 @@ export class MailService implements OnModuleInit {
       port,
       secure: port === 465,
       auth: { user, pass },
+      // Prevent indefinite hangs under slow/unresponsive SMTP servers
+      connectionTimeout: 10_000,
+      greetingTimeout: 5_000,
+      socketTimeout: 30_000,
     });
 
     this.logger.log(`Mail transport ready → ${host}:${port}`);

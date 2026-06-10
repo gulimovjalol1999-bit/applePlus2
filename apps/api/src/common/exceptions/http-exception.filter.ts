@@ -25,6 +25,17 @@ export class GlobalExceptionFilter implements ExceptionFilter {
     const exceptionResponse =
       exception instanceof HttpException ? exception.getResponse() : null;
 
+    // Health endpoints: forward the original Terminus body so monitoring tools
+    // receive structured { status, info, error, details } instead of our
+    // generic error envelope.
+    if (request.path?.startsWith('/health') && typeof exceptionResponse === 'object' && exceptionResponse !== null) {
+      const body = exceptionResponse as Record<string, unknown>;
+      if ('status' in body && 'error' in body) {
+        response.status(status).json(exceptionResponse);
+        return;
+      }
+    }
+
     const message = this.resolveMessage(exceptionResponse, exception);
 
     if (status >= 500) {

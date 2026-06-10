@@ -4,11 +4,12 @@ import {
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import * as bcrypt from 'bcrypt';
 import { randomBytes } from 'crypto';
 import { UsersService } from '../users/users.service';
-import { NotificationsService } from '../notifications/notifications.service';
 import { RedisService } from '../../redis/redis.service';
+import { WelcomeEmailEvent } from '../notifications/events/notification.events';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import { AuthResponseDto, TokenPairDto } from './dto/auth-response.dto';
@@ -23,8 +24,8 @@ export class AuthService {
     private readonly users: UsersService,
     private readonly jwt: JwtService,
     private readonly config: ConfigService,
-    private readonly notifications: NotificationsService,
     private readonly redis: RedisService,
+    private readonly eventEmitter: EventEmitter2,
   ) {}
 
   async register(dto: RegisterDto): Promise<AuthResponseDto> {
@@ -36,8 +37,7 @@ export class AuthService {
       lastName: dto.lastName,
     });
 
-    // Fire-and-forget — registration should not fail because of email delivery
-    void this.notifications.sendWelcomeEmail(user.email, user.firstName);
+    this.eventEmitter.emit('user.registered', new WelcomeEmailEvent(user.id, user.email, user.firstName));
 
     return this.buildResponse(user);
   }
@@ -53,7 +53,8 @@ export class AuthService {
   }
 
   async refresh(userId: string): Promise<TokenPairDto> {
-    const user = await this.users.findByIdOrThrow(userId);
+    const user = await this.users.findById(userId);
+    if (!user || !user.isActive) throw new UnauthorizedException();
     const tokens = await this.generateTokens(user);
     await this.users.setRefreshTokenHash(user.id, sha256(tokens.refreshToken));
     return tokens;

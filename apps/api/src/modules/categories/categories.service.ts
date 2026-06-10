@@ -1,10 +1,9 @@
 import {
-  ConflictException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { IsNull, Repository } from 'typeorm';
 import { Category } from './category.entity';
 import { CreateCategoryDto } from './dto/create-category.dto';
 import { UpdateCategoryDto } from './dto/update-category.dto';
@@ -25,17 +24,16 @@ export class CategoriesService {
   ): Promise<{ data: CategoryResponseDto[]; meta: PaginatedMeta }> {
     const qb = this.repo
       .createQueryBuilder('c')
-      .leftJoinAndSelect('c.children', 'children')
-      .where('c.deleted_at IS NULL');
+      .leftJoinAndSelect('c.children', 'children');
 
     if (filter.search) {
       qb.andWhere('c.name ILIKE :search', { search: `%${filter.search}%` });
     }
     if (filter.parentId !== undefined) {
-      qb.andWhere('c.parent_id = :parentId', { parentId: filter.parentId });
+      qb.andWhere('c.parentId = :parentId', { parentId: filter.parentId });
     }
     if (filter.isActive !== undefined) {
-      qb.andWhere('c.is_active = :isActive', { isActive: filter.isActive });
+      qb.andWhere('c.isActive = :isActive', { isActive: filter.isActive });
     }
 
     qb.orderBy('c.sortOrder', 'ASC').addOrderBy('c.name', 'ASC');
@@ -55,7 +53,7 @@ export class CategoriesService {
 
   async findTree(): Promise<CategoryResponseDto[]> {
     const roots = await this.repo.find({
-      where: { parentId: null as any },
+      where: { parentId: IsNull() },
       relations: ['children', 'children.children'],
       order: { sortOrder: 'ASC', name: 'ASC' },
     });

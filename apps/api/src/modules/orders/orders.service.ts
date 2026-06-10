@@ -1,11 +1,15 @@
 import {
   ForbiddenException,
   Injectable,
+  Logger,
   NotFoundException,
+  ServiceUnavailableException,
   UnprocessableEntityException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DataSource, Repository } from 'typeorm';
+import { ConfigService } from '@nestjs/config';
+import { EventEmitter2 } from '@nestjs/event-emitter';
+import { DataSource, QueryFailedError, Repository } from 'typeorm';
 import { randomBytes } from 'crypto';
 import { Order } from './entities/order.entity';
 import { OrderItem } from './entities/order-item.entity';
@@ -13,16 +17,26 @@ import { CreateOrderDto } from './dto/create-order.dto';
 import { OrderResponseDto, OrderItemResponseDto } from './dto/order-response.dto';
 import { ProductVariant } from '../products/entities/product-variant.entity';
 import { InventoryItem } from '../inventory/entities/inventory-item.entity';
+import { InventoryEventType, InventoryLog } from '../inventory/entities/inventory-log.entity';
+import { Coupon, CouponType } from '../coupons/entities/coupon.entity';
 import { User } from '../users/user.entity';
-import { NotificationsService } from '../notifications/notifications.service';
+import {
+  OrderConfirmedEvent,
+  OrderStatusUpdatedEvent,
+} from '../notifications/events/notification.events';
+import { OrdersGateway } from './orders.gateway';
 import { UpdateOrderStatusDto } from './dto/update-order-status.dto';
 import { OrderStatus, ORDER_STATUS_TRANSITIONS } from '../../common/enums/order-status.enum';
 import { Role } from '../../common/enums/role.enum';
 import { PaginationDto } from '../../common/dto/pagination.dto';
 import { PaginatedMeta } from '../../common/dto/base-response.dto';
 
+const ORDER_NUMBER_MAX_ATTEMPTS = 3;
+
 @Injectable()
 export class OrdersService {
+  private readonly logger = new Logger(OrdersService.name);
+
   constructor(
     @InjectRepository(Order)
     private readonly orderRepo: Repository<Order>,
@@ -31,14 +45,41 @@ export class OrdersService {
     @InjectRepository(User)
     private readonly userRepo: Repository<User>,
     private readonly dataSource: DataSource,
-    private readonly notifications: NotificationsService,
+    private readonly config: ConfigService,
+    private readonly eventEmitter: EventEmitter2,
+    private readonly gateway: OrdersGateway,
   ) {}
 
   async create(
     dto: CreateOrderDto,
-    requestingUser: { id: string; role: Role },
+    requestingUser: { id: string; email: string; role: Role },
   ): Promise<OrderResponseDto> {
-    const order = await this.dataSource.transaction(async (manager) => {
+    for (let attempt = 0; attempt < ORDER_NUMBER_MAX_ATTEMPTS; attempt++) {
+      const orderNumber = this.generateOrderNumber();
+      try {
+        const order = await this.runCreateTransaction(dto, requestingUser, orderNumber);
+
+        const orderDto = this.toDto(order);
+        this.emitOrderConfirmed(order, requestingUser.id);
+        this.gateway.emitOrderCreated(requestingUser.id, orderDto);
+        return orderDto;
+      } catch (err) {
+        if (this.isOrderNumberConflict(err) && attempt < ORDER_NUMBER_MAX_ATTEMPTS - 1) {
+          continue;
+        }
+        throw err;
+      }
+    }
+
+    throw new ServiceUnavailableException('Failed to generate a unique order number');
+  }
+
+  private async runCreateTransaction(
+    dto: CreateOrderDto,
+    requestingUser: { id: string; email: string; role: Role },
+    orderNumber: string,
+  ): Promise<Order> {
+    return this.dataSource.transaction(async (manager) => {
       let itemsSubtotal = 0;
       const orderItems: Partial<OrderItem>[] = [];
 
@@ -79,6 +120,20 @@ export class OrdersService {
         inv.reservedQuantity += item.quantity;
         await manager.save(InventoryItem, inv);
 
+        await manager.save(
+          InventoryLog,
+          manager.create(InventoryLog, {
+            inventoryItemId: inv.id,
+            eventType: InventoryEventType.ORDER_RESERVE,
+            adjustment: item.quantity,
+            quantityBefore: inv.quantity,
+            quantityAfter: inv.quantity,
+            reason: `Order ${orderNumber} created — ${item.quantity} units reserved`,
+            performedById: requestingUser.id,
+            performedByEmail: requestingUser.email,
+          }),
+        );
+
         const unitPrice = +(variant.salePrice ?? variant.price);
         const totalPrice = +(unitPrice * item.quantity).toFixed(2);
         itemsSubtotal += totalPrice;
@@ -93,14 +148,63 @@ export class OrdersService {
         });
       }
 
-      const totalAmount =
-        itemsSubtotal - (dto.discountAmount ?? 0) + (dto.shippingAmount ?? 0);
+      // Coupon validation — server-side, locked to prevent race conditions
+      let discountAmount = 0;
+      let couponId: string | null = null;
+
+      if (dto.couponCode) {
+        const coupon = await manager
+          .createQueryBuilder(Coupon, 'c')
+          .setLock('pessimistic_write')
+          .where('c.code = :code AND c.is_active = true AND c.deleted_at IS NULL', {
+            code: dto.couponCode,
+          })
+          .getOne();
+
+        if (!coupon) {
+          throw new NotFoundException(`Coupon "${dto.couponCode}" not found or inactive`);
+        }
+
+        const now = new Date();
+        if (coupon.startsAt && now < coupon.startsAt) {
+          throw new UnprocessableEntityException('Coupon is not yet active');
+        }
+        if (coupon.expiresAt && now > coupon.expiresAt) {
+          throw new UnprocessableEntityException('Coupon has expired');
+        }
+        if (coupon.maxUses !== null && coupon.usedCount >= coupon.maxUses) {
+          throw new UnprocessableEntityException('Coupon usage limit reached');
+        }
+        if (coupon.minOrderAmount !== null && itemsSubtotal < +coupon.minOrderAmount) {
+          throw new UnprocessableEntityException(
+            `Minimum order amount is $${coupon.minOrderAmount}`,
+          );
+        }
+
+        if (coupon.type === CouponType.PERCENT) {
+          discountAmount = +(itemsSubtotal * (+coupon.value / 100)).toFixed(2);
+        } else {
+          discountAmount = +Math.min(+coupon.value, itemsSubtotal).toFixed(2);
+        }
+
+        // Atomically increment usedCount inside the same transaction
+        coupon.usedCount += 1;
+        await manager.save(Coupon, coupon);
+        couponId = coupon.id;
+      }
+
+      // Shipping rate is server-controlled via SHIPPING_FLAT_RATE env var (default 0).
+      // Replace this line with ShippingRateService.calculateRate() when carrier
+      // integration is ready.
+      const shippingAmount = this.config.get<number>('app.shippingFlatRate') ?? 0;
+      const totalAmount = itemsSubtotal - discountAmount + shippingAmount;
 
       const newOrder = manager.create(Order, {
-        orderNumber: this.generateOrderNumber(),
+        orderNumber,
         userId: requestingUser.id,
-        discountAmount: dto.discountAmount ?? 0,
-        shippingAmount: dto.shippingAmount ?? 0,
+        couponId,
+        discountAmount,
+        shippingAmount,
         totalAmount: Math.max(0, totalAmount),
         notes: dto.notes ?? null,
       });
@@ -113,33 +217,44 @@ export class OrdersService {
       saved.items = savedItems;
       return saved;
     });
-
-    // Send confirmation email + telegram — fire-and-forget, don't block the response
-    void this.sendOrderConfirmationNotification(order, requestingUser.id);
-
-    return this.toDto(order);
   }
 
-  private async sendOrderConfirmationNotification(
-    order: Order,
-    userId: string,
-  ): Promise<void> {
-    const user = await this.userRepo.findOne({ where: { id: userId } });
-    if (!user) return;
+  private emitOrderConfirmed(order: Order, userId: string): void {
+    this.userRepo
+      .findOne({ where: { id: userId } })
+      .then((user) => {
+        if (!user) return;
+        this.eventEmitter.emit(
+          'order.confirmed',
+          new OrderConfirmedEvent(
+            order.id,
+            userId,
+            user.email,
+            user.firstName,
+            order.orderNumber,
+            (order.items ?? []).map((i) => ({
+              name: i.productName,
+              quantity: i.quantity,
+              price: +i.unitPrice,
+            })),
+            +order.totalAmount + +order.discountAmount - +order.shippingAmount,
+            +order.totalAmount,
+            order.notes ?? 'See order details',
+          ),
+        );
+      })
+      .catch((err: Error) =>
+        this.logger.error(`Failed to emit order.confirmed for ${order.id}: ${err.message}`),
+      );
+  }
 
-    await this.notifications.sendOrderConfirmation({
-      to: user.email,
-      firstName: user.firstName,
-      orderNumber: order.orderNumber,
-      items: (order.items ?? []).map((i) => ({
-        name: i.productName,
-        quantity: i.quantity,
-        price: +i.unitPrice,
-      })),
-      subtotal: +order.totalAmount + +order.discountAmount - +order.shippingAmount,
-      total: +order.totalAmount,
-      shippingAddress: order.notes ?? 'See order details',
-    });
+  private isOrderNumberConflict(err: unknown): boolean {
+    return (
+      err instanceof QueryFailedError &&
+      (err as unknown as { code: string; constraint?: string }).code === '23505' &&
+      (err as unknown as { code: string; constraint?: string }).constraint ===
+        'UQ_orders_order_number'
+    );
   }
 
   async findOne(
@@ -167,20 +282,87 @@ export class OrdersService {
     id: string,
     dto: UpdateOrderStatusDto,
   ): Promise<OrderResponseDto> {
-    const order = await this.orderRepo.findOne({ where: { id }, relations: ['items'] });
-    if (!order) throw new NotFoundException(`Order ${id} not found`);
+    const order = await this.dataSource.transaction(async (manager) => {
+      const found = await manager.findOne(Order, { where: { id }, relations: ['items'] });
+      if (!found) throw new NotFoundException(`Order ${id} not found`);
 
-    const allowed = ORDER_STATUS_TRANSITIONS[order.status];
-    if (!allowed.includes(dto.status)) {
-      throw new UnprocessableEntityException(
-        `Cannot transition order from "${order.status}" to "${dto.status}"`,
-      );
-    }
+      const allowed = ORDER_STATUS_TRANSITIONS[found.status];
+      if (!allowed.includes(dto.status)) {
+        throw new UnprocessableEntityException(
+          `Cannot transition order from "${found.status}" to "${dto.status}"`,
+        );
+      }
 
-    order.status = dto.status;
-    await this.orderRepo.save(order);
+      // Inventory side-effects: release reservation on cancel, commit sale on deliver.
+      // Batch-load all inventory rows in a single FOR UPDATE to avoid N+1 and minimize lock hold time.
+      if (dto.status === OrderStatus.CANCELLED || dto.status === OrderStatus.DELIVERED) {
+        const variantIds = found.items.map((i) => i.variantId);
 
-    const user = await this.userRepo.findOne({ where: { id: order.userId ?? '' } });
+        const inventories = await manager
+          .createQueryBuilder(InventoryItem, 'inv')
+          .setLock('pessimistic_write')
+          .where('inv.variant_id IN (:...variantIds)', { variantIds })
+          .getMany();
+
+        const invMap = new Map(inventories.map((inv) => [inv.variantId, inv]));
+
+        for (const item of found.items) {
+          const inv = invMap.get(item.variantId);
+          if (!inv) continue;
+
+          const quantityBefore = inv.quantity;
+
+          if (dto.status === OrderStatus.CANCELLED) {
+            // Release reservation only — physical stock stays in warehouse
+            inv.reservedQuantity = Math.max(0, inv.reservedQuantity - item.quantity);
+            await manager.save(InventoryItem, inv);
+
+            await manager.save(
+              InventoryLog,
+              manager.create(InventoryLog, {
+                inventoryItemId: inv.id,
+                eventType: InventoryEventType.ORDER_RELEASE,
+                adjustment: -item.quantity,
+                quantityBefore,
+                quantityAfter: inv.quantity,
+                reason: `Order ${found.orderNumber} cancelled — reservation released`,
+                performedById: null,
+              }),
+            );
+          } else {
+            // DELIVERED: deduct physical stock, release reservation, increment soldCount
+            inv.quantity = Math.max(0, inv.quantity - item.quantity);
+            inv.reservedQuantity = Math.max(0, inv.reservedQuantity - item.quantity);
+            inv.soldCount += item.quantity;
+            await manager.save(InventoryItem, inv);
+
+            await manager.save(
+              InventoryLog,
+              manager.create(InventoryLog, {
+                inventoryItemId: inv.id,
+                eventType: InventoryEventType.ORDER_COMMIT,
+                adjustment: -item.quantity,
+                quantityBefore,
+                quantityAfter: inv.quantity,
+                reason: `Order ${found.orderNumber} delivered — stock committed`,
+                performedById: null,
+              }),
+            );
+          }
+        }
+      }
+
+      found.status = dto.status;
+      await manager.save(Order, found);
+      return found;
+    });
+
+    const updatedDto = this.toDto(order);
+
+    // Push real-time event before async notifications
+    this.gateway.emitOrderStatusUpdated(order.userId, updatedDto);
+
+    const user = await this.userRepo.findOne({ where: { id: order.userId } });
     if (user) {
       const messages: Record<OrderStatus, string> = {
         [OrderStatus.NEW]: 'Your order has been received.',
@@ -189,16 +371,21 @@ export class OrdersService {
         [OrderStatus.DELIVERED]: 'Your order has been delivered. Enjoy!',
         [OrderStatus.CANCELLED]: 'Your order has been cancelled.',
       };
-      void this.notifications.sendOrderStatusUpdate({
-        to: user.email,
-        firstName: user.firstName,
-        orderNumber: order.orderNumber,
-        status: dto.status,
-        statusMessage: messages[dto.status],
-      });
+      this.eventEmitter.emit(
+        'order.status_updated',
+        new OrderStatusUpdatedEvent(
+          order.id,
+          order.userId,
+          user.email,
+          user.firstName,
+          order.orderNumber,
+          dto.status,
+          messages[dto.status],
+        ),
+      );
     }
 
-    return this.toDto(order);
+    return updatedDto;
   }
 
   async findAll(
@@ -239,8 +426,8 @@ export class OrdersService {
 
   private generateOrderNumber(): string {
     const date = new Date().toISOString().slice(0, 10).replace(/-/g, '');
-    const suffix = randomBytes(3).toString('hex').toUpperCase();
-    return `ORD-${date}-${suffix}`;
+    const suffix = randomBytes(4).toString('hex').toUpperCase(); // 4 bytes → 8 hex chars
+    return `ORD-${date}-${suffix}`; // 21 chars total, fits VARCHAR(30)
   }
 
   private toDto(order: Order): OrderResponseDto {
@@ -248,6 +435,7 @@ export class OrdersService {
       id: order.id,
       orderNumber: order.orderNumber,
       userId: order.userId,
+      couponId: order.couponId,
       status: order.status,
       totalAmount: +order.totalAmount,
       discountAmount: +order.discountAmount,

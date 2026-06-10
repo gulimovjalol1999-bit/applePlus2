@@ -1,7 +1,20 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as https from 'https';
-import { Order } from '../orders/entities/order.entity';
+
+const TELEGRAM_TIMEOUT_MS = 10_000;
+const DEFAULT_RETRY_AFTER_MS = 5_000;
+
+/** Thrown when Telegram responds with 429 — caller should pause delivery for `retryAfterMs`. */
+export class TelegramRateLimitError extends Error {
+  constructor(
+    message: string,
+    public readonly retryAfterMs: number,
+  ) {
+    super(message);
+    this.name = 'TelegramRateLimitError';
+  }
+}
 
 @Injectable()
 export class TelegramService {
@@ -9,42 +22,23 @@ export class TelegramService {
 
   constructor(private readonly config: ConfigService) {}
 
-  async notifyNewOrder(order: Order): Promise<void> {
-    const lines: string[] = [
-      `🛍 <b>New Order</b> #${order.orderNumber}`,
-      '',
-    ];
-
-    for (const item of order.items ?? []) {
-      const price = (+item.totalPrice).toFixed(2);
-      lines.push(`• ${item.productName} × ${item.quantity} — $${price}`);
-    }
-
-    lines.push('');
-    if (+order.discountAmount > 0) {
-      lines.push(`Discount: -$${(+order.discountAmount).toFixed(2)}`);
-    }
-    if (+order.shippingAmount > 0) {
-      lines.push(`Shipping: +$${(+order.shippingAmount).toFixed(2)}`);
-    }
-    lines.push(`<b>Total: $${(+order.totalAmount).toFixed(2)}</b>`);
-    lines.push(`Status: ${order.status.toUpperCase()}`);
-
-    await this.sendMessage(lines.join('\n'));
-  }
-
+  /** Sends a plain-text message to every configured Telegram chat/channel. */
   async sendMessage(text: string): Promise<void> {
     const token = this.config.get<string>('telegram.botToken');
-    const chatId = this.config.get<string>('telegram.chatId');
+    const chatIds = this.config.get<string[]>('telegram.chatIds') ?? [];
 
-    if (!token || !chatId) {
+    if (!token || chatIds.length === 0) {
       this.logger.warn('Telegram not configured — skipping notification');
       return;
     }
 
-    const payload = JSON.stringify({ chat_id: chatId, text, parse_mode: 'HTML' });
+    await Promise.all(chatIds.map((chatId) => this.sendToChat(token, chatId, text)));
+  }
 
-    return new Promise((resolve) => {
+  private sendToChat(token: string, chatId: string, text: string): Promise<void> {
+    const payload = JSON.stringify({ chat_id: chatId, text });
+
+    return new Promise((resolve, reject) => {
       const req = https.request(
         {
           hostname: 'api.telegram.org',
@@ -54,16 +48,57 @@ export class TelegramService {
             'Content-Type': 'application/json',
             'Content-Length': Buffer.byteLength(payload),
           },
+          timeout: TELEGRAM_TIMEOUT_MS,
         },
         (res) => {
-          res.resume();
-          res.on('end', resolve);
+          const chunks: Buffer[] = [];
+          res.on('data', (chunk) => chunks.push(chunk));
+          res.on('end', () => {
+            const body = Buffer.concat(chunks).toString('utf8');
+            const statusCode = res.statusCode ?? 0;
+
+            if (statusCode >= 200 && statusCode < 300) {
+              resolve();
+              return;
+            }
+
+            let description = body;
+            let retryAfterSeconds: number | undefined;
+            try {
+              const parsed = JSON.parse(body) as {
+                description?: string;
+                parameters?: { retry_after?: number };
+              };
+              if (parsed.description) description = parsed.description;
+              retryAfterSeconds = parsed.parameters?.retry_after;
+            } catch {
+              // body wasn't JSON — fall back to raw text
+            }
+
+            const message = `Telegram API error (status ${statusCode}, chat ${chatId}): ${description}`;
+
+            if (statusCode === 429) {
+              const retryAfterMs = (retryAfterSeconds ?? DEFAULT_RETRY_AFTER_MS / 1000) * 1000;
+              this.logger.warn(`${message} — retry after ${retryAfterMs}ms`);
+              reject(new TelegramRateLimitError(message, retryAfterMs));
+              return;
+            }
+
+            this.logger.error(message);
+            reject(new Error(message));
+          });
         },
       );
-      req.on('error', (err) => {
-        this.logger.error(`Telegram send failed: ${err.message}`);
-        resolve();
+
+      req.on('timeout', () => {
+        req.destroy(new Error(`Telegram request timed out after ${TELEGRAM_TIMEOUT_MS}ms`));
       });
+
+      req.on('error', (err) => {
+        this.logger.error(`Telegram send failed (chat ${chatId}): ${err.message}`);
+        reject(err);
+      });
+
       req.write(payload);
       req.end();
     });

@@ -10,6 +10,7 @@ const nextConfig: NextConfig = {
     remotePatterns: [
       { protocol: 'https', hostname: 'images.unsplash.com' },
       { protocol: 'https', hostname: 'cdn.apple-plus.com' },
+      { protocol: 'https', hostname: 'store.storeimages.cdn-apple.com' },
     ],
   },
   async rewrites() {

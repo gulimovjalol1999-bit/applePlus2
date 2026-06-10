@@ -12,4 +12,12 @@ export class PresignedUrlResponseDto {
 
   @ApiProperty({ example: 300, description: 'URL expiry time in seconds' })
   expiresIn: number;
+
+  @ApiProperty({
+    example: 1048576,
+    description:
+      'The client MUST send a Content-Length header with exactly this value when PUTing to ' +
+      'uploadUrl, otherwise the request will be rejected with a signature error.',
+  })
+  requiredContentLength: number;
 }
