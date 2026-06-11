@@ -6,4 +6,5 @@ export default registerAs('database', () => ({
   username: process.env.DB_USER ?? 'postgres',
   password: process.env.DB_PASS ?? 'postgres',
   name: process.env.DB_NAME ?? 'apple_plus',
+  ssl: process.env.DB_SSL === 'true',
 }));

@@ -49,6 +49,7 @@ import { UploadsModule } from './modules/uploads/uploads.module';
         DB_USER: Joi.string().required(),
         DB_PASS: Joi.string().required(),
         DB_NAME: Joi.string().required(),
+        DB_SSL: Joi.boolean().default(false),
         JWT_ACCESS_SECRET: Joi.string().min(32).required(),
         JWT_REFRESH_SECRET: Joi.string().min(32).required(),
         JWT_ACCESS_EXPIRES_IN: Joi.string().default('15m'),

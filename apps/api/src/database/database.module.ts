@@ -21,10 +21,7 @@ import { SnakeNamingStrategy } from './snake-naming.strategy';
         synchronize: false,
         migrationsRun: false,
         logging: config.get<string>('app.nodeEnv') === 'development',
-        ssl:
-          config.get<string>('app.nodeEnv') === 'production'
-            ? { rejectUnauthorized: true }
-            : false,
+        ssl: config.get<boolean>('database.ssl') ? { rejectUnauthorized: true } : false,
       }),
     }),
   ],
