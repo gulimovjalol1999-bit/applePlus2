@@ -20,7 +20,7 @@ async function bootstrap(): Promise<void> {
   const appUrl = config.get<string>('app.url');
 
   // Security headers
-  app.use(helmet());
+  app.use(helmet()); 
 
   // Global route prefix — health is excluded so /health/live works for Docker probe
   app.setGlobalPrefix('api/v1', {
