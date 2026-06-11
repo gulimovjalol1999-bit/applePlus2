@@ -9,7 +9,6 @@ import {
   IsString,
   IsUUID,
   MaxLength,
-  Min,
 } from 'class-validator';
 import { ProductStatus } from '../../../common/enums/product-status.enum';
 

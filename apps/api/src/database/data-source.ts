@@ -1,9 +1,10 @@
 import 'reflect-metadata';
 import { DataSource } from 'typeorm';
 import * as dotenv from 'dotenv';
+import * as path from 'path';
 import { SnakeNamingStrategy } from './snake-naming.strategy';
 
-dotenv.config({ path: require('path').resolve(__dirname, '../../../../.env') });
+dotenv.config({ path: path.resolve(__dirname, '../../../../.env') });
 dotenv.config(); // fallback to cwd .env
 
 export const AppDataSource = new DataSource({
