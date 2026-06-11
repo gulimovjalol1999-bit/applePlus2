@@ -19,12 +19,15 @@ import { ProductVariant } from '../products/entities/product-variant.entity';
 import { InventoryItem } from '../inventory/entities/inventory-item.entity';
 import { InventoryEventType, InventoryLog } from '../inventory/entities/inventory-log.entity';
 import { Coupon, CouponType } from '../coupons/entities/coupon.entity';
+import { Address } from '../shipping/entities/address.entity';
 import { User } from '../users/user.entity';
 import {
   OrderConfirmedEvent,
   OrderStatusUpdatedEvent,
 } from '../notifications/events/notification.events';
 import { OrdersGateway } from './orders.gateway';
+import { CartService } from '../cart/cart.service';
+import { RedisService } from '../../redis/redis.service';
 import { UpdateOrderStatusDto } from './dto/update-order-status.dto';
 import { OrderStatus, ORDER_STATUS_TRANSITIONS } from '../../common/enums/order-status.enum';
 import { Role } from '../../common/enums/role.enum';
@@ -48,20 +51,45 @@ export class OrdersService {
     private readonly config: ConfigService,
     private readonly eventEmitter: EventEmitter2,
     private readonly gateway: OrdersGateway,
+    private readonly cartService: CartService,
+    private readonly redis: RedisService,
   ) {}
 
   async create(
     dto: CreateOrderDto,
     requestingUser: { id: string; email: string; role: Role },
+    idempotencyKey?: string,
   ): Promise<OrderResponseDto> {
+    const idemRedisKey = idempotencyKey
+      ? `idempotency:order:${requestingUser.id}:${idempotencyKey}`
+      : null;
+
+    if (idemRedisKey) {
+      const existingOrderId = await this.redis.get<string>(idemRedisKey);
+      if (existingOrderId) {
+        return this.findOne(existingOrderId, requestingUser);
+      }
+    }
+
     for (let attempt = 0; attempt < ORDER_NUMBER_MAX_ATTEMPTS; attempt++) {
       const orderNumber = this.generateOrderNumber();
       try {
         const order = await this.runCreateTransaction(dto, requestingUser, orderNumber);
 
         const orderDto = this.toDto(order);
+
+        if (idemRedisKey) {
+          const ORDER_IDEMPOTENCY_TTL_SECONDS = 24 * 60 * 60;
+          await this.redis.set(idemRedisKey, order.id, ORDER_IDEMPOTENCY_TTL_SECONDS);
+        }
+
         this.emitOrderConfirmed(order, requestingUser.id);
         this.gateway.emitOrderCreated(requestingUser.id, orderDto);
+        this.cartService
+          .clearCart(requestingUser.id)
+          .catch((err: Error) =>
+            this.logger.error(`Failed to clear cart for user ${requestingUser.id}: ${err.message}`),
+          );
         return orderDto;
       } catch (err) {
         if (this.isOrderNumberConflict(err) && attempt < ORDER_NUMBER_MAX_ATTEMPTS - 1) {
@@ -83,7 +111,13 @@ export class OrdersService {
       let itemsSubtotal = 0;
       const orderItems: Partial<OrderItem>[] = [];
 
-      for (const item of dto.items) {
+      // Lock inventory rows in a stable, variant-id order to avoid lock-ordering
+      // deadlocks between concurrent multi-item orders.
+      const sortedItems = [...dto.items].sort((a, b) =>
+        a.variantId.localeCompare(b.variantId),
+      );
+
+      for (const item of sortedItems) {
         // Fetch variant + product from DB — server side, never trust client price
         const variant = await manager.findOne(ProductVariant, {
           where: { id: item.variantId, isActive: true },
@@ -193,6 +227,16 @@ export class OrdersService {
         couponId = coupon.id;
       }
 
+      // Shipping address — must belong to the requesting user
+      if (dto.shippingAddressId) {
+        const address = await manager.findOne(Address, {
+          where: { id: dto.shippingAddressId },
+        });
+        if (!address || address.userId !== requestingUser.id) {
+          throw new NotFoundException(`Address ${dto.shippingAddressId} not found`);
+        }
+      }
+
       // Shipping rate is server-controlled via SHIPPING_FLAT_RATE env var (default 0).
       // Replace this line with ShippingRateService.calculateRate() when carrier
       // integration is ready.
@@ -203,6 +247,7 @@ export class OrdersService {
         orderNumber,
         userId: requestingUser.id,
         couponId,
+        shippingAddressId: dto.shippingAddressId ?? null,
         discountAmount,
         shippingAmount,
         totalAmount: Math.max(0, totalAmount),
@@ -436,6 +481,7 @@ export class OrdersService {
       orderNumber: order.orderNumber,
       userId: order.userId,
       couponId: order.couponId,
+      shippingAddressId: order.shippingAddressId,
       status: order.status,
       totalAmount: +order.totalAmount,
       discountAmount: +order.discountAmount,

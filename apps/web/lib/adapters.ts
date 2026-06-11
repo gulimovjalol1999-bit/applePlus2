@@ -57,6 +57,10 @@ export function toDisplayProduct(p: ProductResponse): Product {
       ? extractStorages(p.variants, p.basePrice)
       : undefined
 
+  const activeVariants = p.variants?.filter((v) => v.isActive) ?? []
+  const defaultVariantId =
+    activeVariants.find((v) => v.isDefault)?.id ?? activeVariants[0]?.id
+
   return {
     id: p.id,
     slug: p.slug,
@@ -74,6 +78,8 @@ export function toDisplayProduct(p: ProductResponse): Product {
     isNew: false,
     colors: colors && colors.length > 0 ? colors : undefined,
     storages: storages && storages.length > 0 ? storages : undefined,
+    variants: p.variants,
+    defaultVariantId,
     specs: [],
     description: p.description ?? p.shortDescription ?? '',
     features: p.tags ?? [],

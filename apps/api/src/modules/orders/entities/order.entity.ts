@@ -17,6 +17,9 @@ export class Order extends BaseEntity {
   @Column({ type: 'uuid', nullable: true })
   couponId: string | null;
 
+  @Column({ type: 'uuid', nullable: true })
+  shippingAddressId: string | null;
+
   @Column({ type: 'enum', enum: OrderStatus, default: OrderStatus.NEW })
   status: OrderStatus;
 

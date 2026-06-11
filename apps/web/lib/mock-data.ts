@@ -1,3 +1,5 @@
+import type { ProductVariantResponse } from './api-types'
+
 export interface ProductImage {
   url: string
   alt: string
@@ -37,6 +39,8 @@ export interface Product {
   isNew?: boolean
   colors?: ColorVariant[]
   storages?: StorageVariant[]
+  variants?: ProductVariantResponse[]
+  defaultVariantId?: string
   specs: ProductSpec[]
   description: string
   features: string[]

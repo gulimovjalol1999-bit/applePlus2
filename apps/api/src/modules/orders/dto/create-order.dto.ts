@@ -40,6 +40,11 @@ export class CreateOrderDto {
   @Transform(({ value }) => (typeof value === 'string' ? value.toUpperCase().trim() : value))
   couponCode?: string;
 
+  @ApiPropertyOptional({ description: 'Shipping address UUID — must belong to the requesting user' })
+  @IsOptional()
+  @IsUUID()
+  shippingAddressId?: string;
+
   @ApiPropertyOptional({ maxLength: 1000 })
   @IsOptional()
   @IsString()

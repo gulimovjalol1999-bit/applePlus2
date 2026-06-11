@@ -167,12 +167,11 @@ export function orderStatusTemplate(params: {
   statusMessage: string;
 }): string {
   const statusColors: Record<string, string> = {
-    processing: '#0071e3',
+    new: '#0071e3',
     confirmed: '#1a7f37',
     shipping: '#7d4aff',
     delivered: '#1a7f37',
     cancelled: '#d93025',
-    refunded: '#d93025',
   };
 
   const firstName = escapeHtml(params.firstName);

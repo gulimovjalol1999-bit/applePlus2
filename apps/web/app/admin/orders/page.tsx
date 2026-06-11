@@ -1,10 +1,13 @@
 'use client'
 import { useState } from 'react'
-import { ChevronLeft, ChevronRight, ChevronDown, Loader2 } from 'lucide-react'
+import { ChevronLeft, ChevronRight, ChevronDown, Loader2, ShieldAlert } from 'lucide-react'
 import { useAdminOrders, useUpdateOrderStatus } from '@/hooks/useAdminOrders'
+import { useAuthStore } from '@/stores/auth'
 import type { OrderResponse, OrderStatus } from '@/lib/api-types'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
+
+const ORDERS_ROLES = ['owner', 'manager']
 
 const STATUS_STYLE: Record<string, string> = {
   new: 'bg-blue-100 text-blue-700',
@@ -78,10 +81,26 @@ function StatusSelect({ order }: { order: OrderResponse }) {
 
 export default function AdminOrdersPage() {
   const [page, setPage] = useState(1)
-  const { data, isLoading, isError } = useAdminOrders(page, 20)
+  const { user } = useAuthStore()
+  const hasAccess = !!user && ORDERS_ROLES.includes(user.role)
+  const { data, isLoading, isError } = useAdminOrders(page, 20, { enabled: hasAccess })
 
   const orders = data?.data ?? []
   const meta = data?.meta
+
+  if (!hasAccess) {
+    return (
+      <div className="flex h-full min-h-[60vh] items-center justify-center p-6">
+        <div className="text-center">
+          <ShieldAlert className="mx-auto h-8 w-8 text-gray-300" />
+          <p className="mt-3 text-sm text-gray-500">
+            Sizda buyurtmalar bo&apos;limiga kirish huquqi yo&apos;q. Bu sahifa faqat
+            Owner va Manager rollariga ochiq.
+          </p>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="p-6">

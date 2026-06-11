@@ -3,7 +3,8 @@ import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { ShoppingBag, Search, Menu, X, User, ChevronDown, LogOut } from 'lucide-react'
-import { useCartCount, useCartStore } from '@/stores/cart'
+import { useCartUIStore } from '@/stores/cart'
+import { useCart } from '@/hooks/useCart'
 import { brands as MOCK_BRANDS } from '@/lib/mock-data'
 import { CATEGORY_ICONS } from '@/lib/category-icons'
 import { cn } from '@/lib/utils'
@@ -26,8 +27,9 @@ export function Navbar() {
   const [searchQuery, setSearchQuery] = useState('')
   const [scrolled, setScrolled] = useState(false)
   const [brandsOpen, setBrandsOpen] = useState(false)
-  const count = useCartCount()
-  const openCart = useCartStore((s) => s.openCart)
+  const { data: cart } = useCart()
+  const count = cart?.itemCount ?? 0
+  const openCart = useCartUIStore((s) => s.openCart)
   const router = useRouter()
   const { isAuthenticated, user } = useAuthStore()
   const logout = useLogout()

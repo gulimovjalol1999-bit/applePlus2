@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { ShoppingBag, ChevronLeft, Check, Truck, RotateCcw, Shield } from 'lucide-react'
 import { toast } from 'sonner'
 import { type Product } from '@/lib/mock-data'
-import { useCartStore } from '@/stores/cart'
+import { useAddToCart } from '@/hooks/useCart'
 import { cn, formatPrice } from '@/lib/utils'
 import { StarRating } from '@/components/ui/StarRating'
 import { Button } from '@/components/ui/Button'
@@ -17,32 +17,54 @@ interface ProductDetailClientProps {
   related: Product[]
 }
 
+function getAttr(v: { attributes: Record<string, string> }, keys: string[]): string | undefined {
+  for (const k of keys) {
+    if (v.attributes[k]) return v.attributes[k]
+  }
+  return undefined
+}
+
 export function ProductDetailClient({ product, related }: ProductDetailClientProps) {
   const [mainImage, setMainImage] = useState(0)
   const [selectedColor, setSelectedColor] = useState(product.colors?.[0] ?? null)
   const [selectedStorage, setSelectedStorage] = useState(product.storages?.[0] ?? null)
   const [qty, setQty] = useState(1)
-  const addItem = useCartStore((s) => s.addItem)
+  const addToCart = useAddToCart()
 
-  const finalPrice = product.price + (selectedStorage?.priceDelta ?? 0)
+  const activeVariants = product.variants?.filter((v) => v.isActive) ?? []
+  const matchedVariant =
+    activeVariants.find((v) => {
+      const colorMatch = !selectedColor || getAttr(v, ['color', 'Color']) === selectedColor.name
+      const storageMatch =
+        !selectedStorage || getAttr(v, ['storage', 'Storage']) === selectedStorage.label
+      return colorMatch && storageMatch
+    }) ?? activeVariants[0]
 
-  const cartItemId = [product.id, selectedColor?.id, selectedStorage?.id]
-    .filter(Boolean)
-    .join('-')
+  const finalPrice = matchedVariant
+    ? (matchedVariant.salePrice ?? matchedVariant.price)
+    : product.price + (selectedStorage?.priceDelta ?? 0)
+
+  const originalPrice = matchedVariant?.salePrice
+    ? matchedVariant.price
+    : product.originalPrice
+  const discountPercent = matchedVariant?.salePrice
+    ? Math.round(
+        ((matchedVariant.price - matchedVariant.salePrice) / matchedVariant.price) * 100,
+      )
+    : product.discountPercent
 
   const handleAddToCart = () => {
-    addItem({
-      cartItemId,
-      productId: product.id,
-      slug: product.slug,
-      name: product.name,
-      image: product.images[0].url,
-      price: finalPrice,
-      color: selectedColor?.name,
-      colorHex: selectedColor?.hex,
-      storage: selectedStorage?.label,
-    })
-    toast.success('Added to cart!', { description: product.name })
+    if (!matchedVariant) {
+      toast.error('This combination is currently unavailable')
+      return
+    }
+    addToCart.mutate(
+      { variantId: matchedVariant.id, quantity: qty },
+      {
+        onSuccess: () => toast.success('Added to cart!', { description: product.name }),
+        onError: (err) => toast.error((err as Error).message),
+      },
+    )
   }
 
   return (
@@ -124,14 +146,14 @@ export function ProductDetailClient({ product, related }: ProductDetailClientPro
             {/* Price */}
             <div className="flex items-baseline gap-3">
               <span className="text-4xl font-bold text-ap-black">{formatPrice(finalPrice)}</span>
-              {product.originalPrice && (
+              {originalPrice && (
                 <span className="text-lg text-ap-text3 line-through">
-                  {formatPrice(product.originalPrice + (selectedStorage?.priceDelta ?? 0))}
+                  {formatPrice(originalPrice)}
                 </span>
               )}
-              {product.discountPercent && (
+              {discountPercent && (
                 <span className="rounded-full bg-red-50 px-2.5 py-0.5 text-sm font-semibold text-red-500">
-                  Save {product.discountPercent}%
+                  Save {discountPercent}%
                 </span>
               )}
             </div>
@@ -211,13 +233,18 @@ export function ProductDetailClient({ product, related }: ProductDetailClientPro
                   +
                 </button>
               </div>
-              <Button onClick={handleAddToCart} size="lg" className="flex-1 gap-2">
+              <Button
+                onClick={handleAddToCart}
+                size="lg"
+                className="flex-1 gap-2"
+                disabled={!matchedVariant || addToCart.isPending}
+              >
                 <ShoppingBag className="h-5 w-5" />
                 Add to Cart
               </Button>
             </div>
 
-            {product.inStock ? (
+            {matchedVariant ? (
               <p className="flex items-center gap-1.5 text-sm text-green-600 font-medium">
                 <Check className="h-4 w-4" /> In Stock — ships within 1–2 days
               </p>

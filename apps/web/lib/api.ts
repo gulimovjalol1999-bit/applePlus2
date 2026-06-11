@@ -12,6 +12,27 @@ function getAccessToken(): string | null {
   }
 }
 
+const GUEST_SESSION_KEY = 'ap-guest-session'
+
+export function getOrCreateGuestSessionId(): string {
+  try {
+    let id = localStorage.getItem(GUEST_SESSION_KEY)
+    if (!id) {
+      id = crypto.randomUUID()
+      localStorage.setItem(GUEST_SESSION_KEY, id)
+    }
+    return id
+  } catch {
+    return crypto.randomUUID()
+  }
+}
+
+export function clearGuestSessionId(): void {
+  try {
+    localStorage.removeItem(GUEST_SESSION_KEY)
+  } catch { /* ignore */ }
+}
+
 function getRefreshTokenValue(): string | null {
   try {
     const raw = localStorage.getItem('ap-auth')
@@ -72,6 +93,7 @@ async function request<T>(
     ...(options.headers as Record<string, string> | undefined),
   }
   if (token) headers['Authorization'] = `Bearer ${token}`
+  else if (path.startsWith('/cart')) headers['X-Session-Id'] = getOrCreateGuestSessionId()
 
   const res = await fetch(`${BASE_URL}${path}`, { ...options, headers })
 
@@ -112,9 +134,10 @@ async function request<T>(
 export const api = {
   get: <T>(path: string, params?: QueryParams) =>
     request<T>(`${path}${buildQuery(params)}`, { method: 'GET' }),
-  post: <T>(path: string, body?: unknown) =>
+  post: <T>(path: string, body?: unknown, options?: { headers?: Record<string, string> }) =>
     request<T>(path, {
       method: 'POST',
+      headers: options?.headers,
       body: body !== undefined ? JSON.stringify(body) : undefined,
     }),
   patch: <T>(path: string, body?: unknown) =>

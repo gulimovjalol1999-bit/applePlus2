@@ -3,12 +3,13 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/lib/api'
 import type { OrderResponse, OrderStatus, PaginatedResponse } from '@/lib/api-types'
 
-export function useAdminOrders(page = 1, limit = 20) {
+export function useAdminOrders(page = 1, limit = 20, options?: { enabled?: boolean }) {
   return useQuery({
     queryKey: ['admin', 'orders', page, limit],
     queryFn: () =>
       api.get<PaginatedResponse<OrderResponse>>('/orders', { page, limit }),
     staleTime: 30_000,
+    enabled: options?.enabled ?? true,
   })
 }
 

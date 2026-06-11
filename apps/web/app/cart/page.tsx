@@ -1,17 +1,43 @@
 'use client'
 import Image from 'next/image'
 import Link from 'next/link'
-import { Minus, Plus, Trash2, ShoppingBag, ArrowLeft, Lock } from 'lucide-react'
-import { useCartStore, useCartTotal } from '@/stores/cart'
+import { useRouter } from 'next/navigation'
+import { Minus, Plus, Trash2, ShoppingBag, ArrowLeft, Lock, Loader2 } from 'lucide-react'
+import { toast } from 'sonner'
+import { useCart, useUpdateCartItem, useRemoveCartItem, useClearCart } from '@/hooks/useCart'
+import { useAuthStore } from '@/stores/auth'
 import { formatPrice } from '@/lib/utils'
 import { Button } from '@/components/ui/Button'
 
+const FALLBACK_IMAGE =
+  'https://images.unsplash.com/photo-1510557880182-3d4d3cba35a5?w=200&q=80'
+
 export default function CartPage() {
-  const { items, removeItem, updateQuantity, clearCart } = useCartStore()
-  const total = useCartTotal()
-  const shipping = total >= 50 ? 0 : 9.99
-  const tax = total * 0.08875
-  const grandTotal = total + shipping + tax
+  const router = useRouter()
+  const { isAuthenticated } = useAuthStore()
+  const { data: cart, isLoading } = useCart()
+  const updateItem = useUpdateCartItem()
+  const removeItem = useRemoveCartItem()
+  const clearCart = useClearCart()
+
+  const items = cart?.items ?? []
+  const subtotal = cart?.subtotal ?? 0
+
+  const handleCheckout = () => {
+    if (!isAuthenticated) {
+      router.push('/login?returnTo=/checkout')
+      return
+    }
+    router.push('/checkout')
+  }
+
+  if (isLoading) {
+    return (
+      <div className="flex min-h-[60vh] items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-ap-text3" />
+      </div>
+    )
+  }
 
   if (items.length === 0) {
     return (
@@ -35,8 +61,13 @@ export default function CartPage() {
       <div className="mb-8 flex items-center justify-between">
         <h1 className="text-3xl font-bold text-ap-black">Shopping Cart</h1>
         <button
-          onClick={clearCart}
-          className="text-sm text-ap-text3 hover:text-red-500 transition-colors"
+          onClick={() =>
+            clearCart.mutate(undefined, {
+              onError: (e) => toast.error((e as Error).message),
+            })
+          }
+          disabled={clearCart.isPending}
+          className="text-sm text-ap-text3 hover:text-red-500 transition-colors disabled:opacity-50"
         >
           Clear cart
         </button>
@@ -54,51 +85,67 @@ export default function CartPage() {
 
           <ul className="divide-y divide-ap-gray2">
             {items.map((item) => (
-              <li key={item.cartItemId} className="flex gap-4 py-6">
+              <li key={item.id} className="flex gap-4 py-6">
                 <div className="relative h-24 w-24 shrink-0 overflow-hidden rounded-2xl bg-ap-gray1">
                   <Image
-                    src={item.image}
-                    alt={item.name}
+                    src={item.imageUrl ?? FALLBACK_IMAGE}
+                    alt={item.productName}
                     fill
                     className="object-cover"
                     sizes="96px"
                   />
                 </div>
                 <div className="flex flex-1 flex-col gap-1 min-w-0">
-                  <Link
-                    href={`/products/${item.slug}`}
-                    className="font-semibold text-ap-black hover:text-accent transition-colors leading-snug"
-                  >
-                    {item.name}
-                  </Link>
-                  {(item.color || item.storage) && (
-                    <p className="text-sm text-ap-text3">
-                      {[item.color, item.storage].filter(Boolean).join(' · ')}
-                    </p>
+                  <p className="font-semibold text-ap-black leading-snug">{item.productName}</p>
+                  {item.variantName && item.variantName !== item.productName && (
+                    <p className="text-sm text-ap-text3">{item.variantName}</p>
                   )}
-                  <p className="font-bold text-ap-black">{formatPrice(item.price)}</p>
+                  <p className="font-bold text-ap-black">{formatPrice(item.salePrice ?? item.price)}</p>
                   <div className="mt-2 flex items-center gap-4">
                     <div className="flex items-center rounded-full border border-ap-gray2">
                       <button
-                        onClick={() => updateQuantity(item.cartItemId, item.quantity - 1)}
-                        className="flex h-8 w-8 items-center justify-center rounded-full text-ap-text2 hover:bg-ap-gray1 hover:text-ap-black transition-colors"
+                        onClick={() => {
+                          if (item.quantity <= 1) {
+                            removeItem.mutate(item.variantId, {
+                              onError: (e) => toast.error((e as Error).message),
+                            })
+                            return
+                          }
+                          updateItem.mutate(
+                            { variantId: item.variantId, quantity: item.quantity - 1 },
+                            { onError: (e) => toast.error((e as Error).message) },
+                          )
+                        }}
+                        disabled={updateItem.isPending || removeItem.isPending}
+                        className="flex h-8 w-8 items-center justify-center rounded-full text-ap-text2 hover:bg-ap-gray1 hover:text-ap-black transition-colors disabled:opacity-50"
                       >
                         <Minus className="h-3.5 w-3.5" />
                       </button>
                       <span className="w-7 text-center text-sm font-semibold">{item.quantity}</span>
                       <button
-                        onClick={() => updateQuantity(item.cartItemId, item.quantity + 1)}
-                        className="flex h-8 w-8 items-center justify-center rounded-full text-ap-text2 hover:bg-ap-gray1 hover:text-ap-black transition-colors"
+                        onClick={() =>
+                          updateItem.mutate(
+                            { variantId: item.variantId, quantity: item.quantity + 1 },
+                            { onError: (e) => toast.error((e as Error).message) },
+                          )
+                        }
+                        disabled={updateItem.isPending}
+                        className="flex h-8 w-8 items-center justify-center rounded-full text-ap-text2 hover:bg-ap-gray1 hover:text-ap-black transition-colors disabled:opacity-50"
                       >
                         <Plus className="h-3.5 w-3.5" />
                       </button>
                     </div>
                     <span className="text-sm font-semibold text-ap-black">
-                      {formatPrice(item.price * item.quantity)}
+                      {formatPrice(item.lineTotal)}
                     </span>
                     <button
-                      onClick={() => removeItem(item.cartItemId)}
-                      className="ml-auto text-ap-text3 hover:text-red-500 transition-colors"
+                      onClick={() =>
+                        removeItem.mutate(item.variantId, {
+                          onError: (e) => toast.error((e as Error).message),
+                        })
+                      }
+                      disabled={removeItem.isPending}
+                      className="ml-auto text-ap-text3 hover:text-red-500 transition-colors disabled:opacity-50"
                     >
                       <Trash2 className="h-4 w-4" />
                     </button>
@@ -115,32 +162,20 @@ export default function CartPage() {
             <h2 className="text-lg font-bold text-ap-black mb-5">Order Summary</h2>
             <div className="space-y-3 text-sm">
               <div className="flex justify-between text-ap-text2">
-                <span>Subtotal ({items.reduce((s, i) => s + i.quantity, 0)} items)</span>
-                <span className="text-ap-black font-medium">{formatPrice(total)}</span>
+                <span>Subtotal ({cart?.itemCount ?? 0} items)</span>
+                <span className="text-ap-black font-medium">{formatPrice(subtotal)}</span>
               </div>
-              <div className="flex justify-between text-ap-text2">
-                <span>Shipping</span>
-                <span className={shipping === 0 ? 'text-green-600 font-medium' : 'text-ap-black font-medium'}>
-                  {shipping === 0 ? 'Free' : formatPrice(shipping)}
-                </span>
-              </div>
-              <div className="flex justify-between text-ap-text2">
-                <span>Estimated Tax</span>
-                <span className="text-ap-black font-medium">{formatPrice(tax)}</span>
-              </div>
-              {total < 50 && (
-                <p className="rounded-xl bg-blue-50 px-3 py-2 text-xs text-accent">
-                  Add {formatPrice(50 - total)} more for free shipping!
-                </p>
-              )}
+              <p className="text-xs text-ap-text3">
+                Shipping & taxes are calculated at checkout
+              </p>
               <div className="border-t border-ap-gray2 pt-3 flex justify-between">
                 <span className="font-bold text-ap-black">Total</span>
-                <span className="font-bold text-ap-black text-lg">{formatPrice(grandTotal)}</span>
+                <span className="font-bold text-ap-black text-lg">{formatPrice(subtotal)}</span>
               </div>
             </div>
 
             <div className="mt-6 space-y-3">
-              <Button className="w-full" size="lg">
+              <Button className="w-full" size="lg" onClick={handleCheckout}>
                 Proceed to Checkout
               </Button>
               <Link href="/products">

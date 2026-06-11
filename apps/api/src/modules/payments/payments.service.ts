@@ -36,6 +36,38 @@ export class PaymentsService {
       where: { idempotencyKey: dto.idempotencyKey },
     });
     if (existing) {
+      // A FAILED payment can be retried by reusing the same idempotency key:
+      // reset the existing row instead of returning the stale failure
+      // (idempotencyKey is unique, so a new row can't be inserted).
+      if (existing.status === PaymentStatus.FAILED) {
+        return this.dataSource.transaction(async (manager) => {
+          const order = await manager
+            .createQueryBuilder(Order, 'o')
+            .setLock('pessimistic_read')
+            .where('o.id = :id', { id: existing.orderId })
+            .getOne();
+
+          if (!order) throw new NotFoundException(`Order ${existing.orderId} not found`);
+          if (order.status === OrderStatus.CANCELLED) {
+            throw new UnprocessableEntityException('Cannot create payment for a cancelled order');
+          }
+
+          existing.status = PaymentStatus.PENDING;
+          existing.amount = +order.totalAmount;
+          existing.provider = dto.provider;
+          existing.currency = dto.currency ?? 'USD';
+          existing.providerPaymentId = null;
+          existing.paidAt = null;
+          existing.metadata = {};
+
+          const saved = await manager.save(Payment, existing);
+          this.logger.log(
+            `Payment retry: id=${saved.id} order=${saved.orderId} key=${dto.idempotencyKey} reset to PENDING`,
+          );
+          return this.toDto(saved);
+        });
+      }
+
       this.logger.log(`Idempotent return for key=${dto.idempotencyKey} payment=${existing.id}`);
       return this.toDto(existing);
     }

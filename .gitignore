@@ -1,12 +1,12 @@
 node_modules/
 dist/
 .next/
+.env.example
 .env
 .env.local
 .env.production
 .env.staging
 *.log
+*.tsbuildinfo
 coverage/
 .DS_Store
-# Docker
-.dockerignore

@@ -1,0 +1,84 @@
+# Production compose file — lives on the deploy server (DEPLOY_PATH).
+# CI builds and pushes images to GHCR; CD runs `docker compose pull api web`
+# and `docker compose up -d --no-deps --remove-orphans api web` against this file.
+#
+# Server .env must define GHCR_IMAGE_REPO=<github-owner>/<repo> (lowercase),
+# matching the ${{ github.repository }} used by ci.yml to tag images.
+#
+# This server also runs other projects, so this stack uses non-default host
+# ports to avoid collisions: API_PORT (default 4001), WEB_PORT (default 3001).
+# Override them in .env if those are taken too. Postgres/Redis/MinIO are not
+# exposed to the host at all — only api/web are reachable, via nginx.
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASS}
+      POSTGRES_DB: ${DB_NAME}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: >-
+      sh -c "if [ -n \"$$REDIS_PASSWORD\" ]; then redis-server --requirepass \"$$REDIS_PASSWORD\"; else redis-server; fi"
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+    volumes:
+      - redis_data:/data
+
+  minio:
+    # Pinned to a pre-x86-64-v2 build — newer minio images crash with
+    # "Fatal glibc error: CPU does not support x86-64-v2" on older CPUs
+    # (e.g. this server's QEMU virtual CPU).
+    image: minio/minio:RELEASE.2023-09-04T19-57-37Z
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ACCESS_KEY}
+      MINIO_ROOT_PASSWORD: ${MINIO_SECRET_KEY}
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  api:
+    image: ghcr.io/${GHCR_IMAGE_REPO}/api:latest
+    restart: unless-stopped
+    env_file: .env
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+      minio:
+        condition: service_healthy
+    ports:
+      - "${API_PORT:-4001}:4000"
+
+  web:
+    image: ghcr.io/${GHCR_IMAGE_REPO}/web:latest
+    restart: unless-stopped
+    environment:
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL}
+      NEXT_PUBLIC_SITE_URL: ${NEXT_PUBLIC_SITE_URL}
+    depends_on:
+      - api
+    ports:
+      - "${WEB_PORT:-3001}:3000"
+
+volumes:
+  postgres_data:
+  redis_data:
+  minio_data:

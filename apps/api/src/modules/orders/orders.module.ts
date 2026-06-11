@@ -10,6 +10,7 @@ import { User } from '../users/user.entity';
 import { OrdersService } from './orders.service';
 import { OrdersController } from './orders.controller';
 import { OrdersGateway } from './orders.gateway';
+import { CartModule } from '../cart/cart.module';
 @Module({
   imports: [
     TypeOrmModule.forFeature([Order, OrderItem, ProductVariant, InventoryItem, User]),
@@ -20,6 +21,7 @@ import { OrdersGateway } from './orders.gateway';
       }),
       inject: [ConfigService],
     }),
+    CartModule,
   ],
   controllers: [OrdersController],
   providers: [OrdersService, OrdersGateway],

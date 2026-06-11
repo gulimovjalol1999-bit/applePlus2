@@ -16,6 +16,7 @@ export class OrderResponseDto {
   @ApiProperty() orderNumber: string;
   @ApiProperty() userId: string;
   @ApiPropertyOptional() couponId: string | null;
+  @ApiPropertyOptional() shippingAddressId: string | null;
   @ApiProperty({ enum: OrderStatus }) status: OrderStatus;
   @ApiProperty() totalAmount: number;
   @ApiProperty() discountAmount: number;

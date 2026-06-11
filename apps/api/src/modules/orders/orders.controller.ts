@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Headers, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
 import {
   ApiBearerAuth,
   ApiCreatedResponse,
@@ -32,8 +32,9 @@ export class OrdersController {
   create(
     @Body() dto: CreateOrderDto,
     @CurrentUser() user: { id: string; email: string; role: Role },
+    @Headers('idempotency-key') idempotencyKey?: string,
   ) {
-    return this.ordersService.create(dto, user);
+    return this.ordersService.create(dto, user, idempotencyKey);
   }
 
   @Get()

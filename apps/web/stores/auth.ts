@@ -1,8 +1,28 @@
 'use client'
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
-import { api } from '@/lib/api'
-import type { AuthUser, AuthTokens } from '@/lib/api-types'
+import { api, getOrCreateGuestSessionId, clearGuestSessionId } from '@/lib/api'
+import type { AuthUser, AuthResponse } from '@/lib/api-types'
+
+const BASE_URL =
+  process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/api/v1'
+
+// Runs before auth state flips to authenticated, so the new access token
+// must be passed explicitly rather than read from persisted storage.
+async function mergeGuestCart(accessToken: string) {
+  try {
+    const sessionId = getOrCreateGuestSessionId()
+    await fetch(`${BASE_URL}/cart/merge`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${accessToken}`,
+      },
+      body: JSON.stringify({ sessionId }),
+    })
+    clearGuestSessionId()
+  } catch { /* ignore — guest cart merge is best-effort */ }
+}
 
 interface AuthState {
   user: AuthUser | null
@@ -31,29 +51,31 @@ export const useAuthStore = create<AuthState>()(
       isAuthenticated: false,
 
       login: async (email, password) => {
-        const res = await api.post<{ data: AuthTokens } | AuthTokens>(
+        const res = await api.post<{ data: AuthResponse } | AuthResponse>(
           '/auth/login',
           { email, password },
         )
-        const payload = (res as { data: AuthTokens }).data ?? (res as AuthTokens)
+        const payload = (res as { data: AuthResponse }).data ?? (res as AuthResponse)
+        await mergeGuestCart(payload.tokens.accessToken)
         set({
           user: payload.user,
-          accessToken: payload.accessToken,
-          refreshToken: payload.refreshToken,
+          accessToken: payload.tokens.accessToken,
+          refreshToken: payload.tokens.refreshToken,
           isAuthenticated: true,
         })
       },
 
       register: async (data) => {
-        const res = await api.post<{ data: AuthTokens } | AuthTokens>(
+        const res = await api.post<{ data: AuthResponse } | AuthResponse>(
           '/auth/register',
           data,
         )
-        const payload = (res as { data: AuthTokens }).data ?? (res as AuthTokens)
+        const payload = (res as { data: AuthResponse }).data ?? (res as AuthResponse)
+        await mergeGuestCart(payload.tokens.accessToken)
         set({
           user: payload.user,
-          accessToken: payload.accessToken,
-          refreshToken: payload.refreshToken,
+          accessToken: payload.tokens.accessToken,
+          refreshToken: payload.tokens.refreshToken,
           isAuthenticated: true,
         })
       },

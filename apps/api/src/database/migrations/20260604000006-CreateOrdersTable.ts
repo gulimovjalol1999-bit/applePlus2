@@ -6,7 +6,7 @@ export class CreateOrdersTable20260604000006 implements MigrationInterface {
   async up(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.query(`
       CREATE TYPE "order_status_enum" AS ENUM (
-        'new', 'confirmed', 'processing', 'shipped', 'delivered', 'cancelled', 'refunded'
+        'new', 'confirmed', 'shipping', 'delivered', 'cancelled'
       )
     `);
 

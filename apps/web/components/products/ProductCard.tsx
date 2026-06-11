@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { ShoppingBag } from 'lucide-react'
 import { toast } from 'sonner'
 import { type Product } from '@/lib/mock-data'
-import { useCartStore } from '@/stores/cart'
+import { useAddToCart } from '@/hooks/useCart'
 import { cn, formatPrice } from '@/lib/utils'
 import { StarRating } from '@/components/ui/StarRating'
 
@@ -14,20 +14,22 @@ interface ProductCardProps {
 }
 
 export function ProductCard({ product, className }: ProductCardProps) {
-  const addItem = useCartStore((s) => s.addItem)
+  const addToCart = useAddToCart()
 
   const handleAddToCart = (e: React.MouseEvent) => {
     e.preventDefault()
     e.stopPropagation()
-    addItem({
-      cartItemId: product.id,
-      productId: product.id,
-      slug: product.slug,
-      name: product.name,
-      image: product.images[0].url,
-      price: product.price,
-    })
-    toast.success('Added to cart', { description: product.name })
+    if (!product.defaultVariantId) {
+      toast.error('This product is not available right now')
+      return
+    }
+    addToCart.mutate(
+      { variantId: product.defaultVariantId, quantity: 1 },
+      {
+        onSuccess: () => toast.success('Added to cart', { description: product.name }),
+        onError: (err) => toast.error((err as Error).message),
+      },
+    )
   }
 
   return (
@@ -65,11 +67,12 @@ export function ProductCard({ product, className }: ProductCardProps) {
         {/* Quick add */}
         <button
           onClick={handleAddToCart}
+          disabled={!product.defaultVariantId || addToCart.isPending}
           className={cn(
             'absolute bottom-3 right-3 flex h-9 w-9 items-center justify-center rounded-full bg-white shadow-md',
             'text-ap-black transition-all duration-200',
             'opacity-0 translate-y-2 group-hover:opacity-100 group-hover:translate-y-0',
-            'hover:bg-accent hover:text-white'
+            'hover:bg-accent hover:text-white disabled:opacity-50'
           )}
           aria-label="Add to cart"
         >

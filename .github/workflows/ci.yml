@@ -38,6 +38,12 @@ jobs:
       - name: Type-check
         run: pnpm --filter @apple-plus/api exec tsc --noEmit
 
+      - name: Lint web
+        run: pnpm --filter @apple-plus/web lint
+
+      - name: Type-check web
+        run: pnpm --filter @apple-plus/web type-check
+
   # ──────────────────────────────────────────────
   # 2. Unit tests
   # ──────────────────────────────────────────────
@@ -94,8 +100,14 @@ jobs:
           path: apps/api/dist
           retention-days: 3
 
+      - name: Build web
+        env:
+          NEXT_PUBLIC_API_URL: ${{ vars.NEXT_PUBLIC_API_URL }}
+          NEXT_PUBLIC_SITE_URL: ${{ vars.NEXT_PUBLIC_SITE_URL }}
+        run: pnpm --filter @apple-plus/web build
+
   # ──────────────────────────────────────────────
-  # 4. Docker image (only on push to main)
+  # 4. Docker images (only on push to main)
   # ──────────────────────────────────────────────
   docker:
     name: Docker Build & Push
@@ -105,6 +117,14 @@ jobs:
     permissions:
       contents: read
       packages: write
+
+    strategy:
+      matrix:
+        include:
+          - app: api
+            dockerfile: apps/api/Dockerfile
+          - app: web
+            dockerfile: apps/web/Dockerfile
 
     steps:
       - uses: actions/checkout@v4
@@ -123,7 +143,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ghcr.io/${{ github.repository }}/api
+          images: ghcr.io/${{ github.repository }}/${{ matrix.app }}
           tags: |
             type=sha,prefix=sha-
             type=raw,value=latest
@@ -132,9 +152,12 @@ jobs:
         uses: docker/build-push-action@v5
         with:
           context: .
-          file: apps/api/Dockerfile
+          file: ${{ matrix.dockerfile }}
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          build-args: |
+            NEXT_PUBLIC_API_URL=${{ vars.NEXT_PUBLIC_API_URL }}
+            NEXT_PUBLIC_SITE_URL=${{ vars.NEXT_PUBLIC_SITE_URL }}
+          cache-from: type=gha,scope=${{ matrix.app }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.app }}

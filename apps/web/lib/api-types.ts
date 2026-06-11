@@ -21,10 +21,14 @@ export interface AuthUser {
   role: string
 }
 
-export interface AuthTokens {
+export interface TokenPair {
   accessToken: string
   refreshToken: string
+}
+
+export interface AuthResponse {
   user: AuthUser
+  tokens: TokenPair
 }
 
 // Products
@@ -121,8 +125,11 @@ export interface ReviewResponse {
 export interface CartItemResponse {
   id: string
   variantId: string
+  productId: string
+  productName: string
   variantName: string
   sku: string
+  imageUrl: string | null
   price: number
   salePrice: number | null
   quantity: number
@@ -134,6 +141,41 @@ export interface CartResponse {
   items: CartItemResponse[]
   subtotal: number
   itemCount: number
+}
+
+// Shipping addresses
+export interface AddressResponse {
+  id: string
+  userId: string
+  label: string
+  fullName: string
+  phone: string
+  addressLine: string
+  city: string
+  region: string | null
+  postalCode: string | null
+  country: string
+  isDefault: boolean
+  createdAt: string
+}
+
+export interface CreateAddressRequest {
+  label?: string
+  fullName: string
+  phone: string
+  addressLine: string
+  city: string
+  region?: string
+  postalCode?: string
+  country?: string
+  isDefault?: boolean
+}
+
+// Coupons
+export interface CouponValidationResponse {
+  valid: boolean
+  discount: number
+  finalAmount: number
 }
 
 // Wishlist
@@ -163,6 +205,8 @@ export interface OrderResponse {
   id: string
   orderNumber: string
   userId: string | null
+  couponId: string | null
+  shippingAddressId: string | null
   status: OrderStatus
   totalAmount: number
   discountAmount: number

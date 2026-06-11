@@ -27,10 +27,10 @@ jobs:
             echo ${{ secrets.GITHUB_TOKEN }} | \
               docker login ghcr.io -u ${{ github.actor }} --password-stdin
 
-            docker compose pull api
+            docker compose pull api web
 
             # Zero-downtime restart
-            docker compose up -d --no-deps --remove-orphans api
+            docker compose up -d --no-deps --remove-orphans api web
 
             # Remove dangling images
             docker image prune -f
