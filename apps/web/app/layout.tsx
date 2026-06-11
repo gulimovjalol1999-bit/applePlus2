@@ -11,7 +11,7 @@ const inter = Inter({
   display: 'swap',
 })
 
-const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? 'https://apple-plus.com'
+const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://apple-plus.com'
 const SITE_NAME = 'Apple Plus'
 const DEFAULT_DESCRIPTION =
   'Shop the latest iPhone, MacBook, iPad, Apple Watch, and accessories at Apple Plus — your trusted premium electronics store.'

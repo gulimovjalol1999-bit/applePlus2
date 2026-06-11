@@ -5,7 +5,7 @@ import { api, getOrCreateGuestSessionId, clearGuestSessionId } from '@/lib/api'
 import type { AuthUser, AuthResponse } from '@/lib/api-types'
 
 const BASE_URL =
-  process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/api/v1'
+  process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api/v1'
 
 // Runs before auth state flips to authenticated, so the new access token
 // must be passed explicitly rather than read from persisted storage.
