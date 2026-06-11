@@ -2,6 +2,7 @@
 import { useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuthStore } from '@/stores/auth'
+import { AdminSidebar } from '@/components/admin/AdminSidebar'
 
 const ADMIN_ROLES = ['owner', 'manager', 'operator', 'warehouse']
 
@@ -30,5 +31,10 @@ export function AdminGuard({ children }: { children: React.ReactNode }) {
     )
   }
 
-  return <>{children}</>
+  return (
+    <>
+      <AdminSidebar />
+      <main className="flex-1 overflow-y-auto">{children}</main>
+    </>
+  )
 }
