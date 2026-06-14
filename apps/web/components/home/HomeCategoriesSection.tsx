@@ -2,11 +2,12 @@
 import Link from 'next/link'
 import { CATEGORY_ICONS } from '@/lib/category-icons'
 import { useCategories } from '@/hooks/useCategories'
-import { categories as MOCK_CATEGORIES } from '@/lib/mock-data'
 
 export function HomeCategoriesSection() {
   const { data: categoriesData } = useCategories()
-  const cats = categoriesData?.data ?? MOCK_CATEGORIES
+  const cats = categoriesData?.data ?? []
+
+  if (cats.length === 0) return null
 
   return (
     <section className="container-ap py-20">

@@ -8,7 +8,6 @@ import { useProducts } from '@/hooks/useProducts'
 import { useCategories } from '@/hooks/useCategories'
 import { useBrands } from '@/hooks/useBrands'
 import { toDisplayProduct } from '@/lib/adapters'
-import { products as MOCK_PRODUCTS, categories as MOCK_CATEGORIES, brands as MOCK_BRANDS } from '@/lib/mock-data'
 
 
 // Map backend category slug → Apple marketing name
@@ -51,9 +50,8 @@ export function ProductsBrowser({
   const apiCategories = categoriesData?.data ?? []
   const apiBrands = brandsData?.data ?? []
 
-  // Fallback to mock data while API is not available
-  const displayCategories = apiCategories.length > 0 ? apiCategories : MOCK_CATEGORIES
-  const displayBrands = apiBrands.length > 0 ? apiBrands : MOCK_BRANDS
+  const displayCategories = apiCategories
+  const displayBrands = apiBrands
 
   const activeCategoryId = useMemo(() => {
     if (!activeCategory || apiCategories.length === 0) return undefined
@@ -75,7 +73,7 @@ export function ProductsBrowser({
     }
   }, [sortBy])
 
-  const { data: productsData, isLoading, error } = useProducts({
+  const { data: productsData, isLoading } = useProducts({
     page,
     limit: 40,
     search: query.trim() || undefined,
@@ -85,31 +83,8 @@ export function ProductsBrowser({
     ...sortParams,
   })
 
-  // Fall back to mock data if API unavailable
   const apiProducts = productsData?.data ?? []
-  const usingMockData = apiProducts.length === 0 && !isLoading && !error
-
-  const filteredMock = useMemo(() => {
-    if (!usingMockData) return []
-    let items = [...MOCK_PRODUCTS]
-    if (activeCategory) items = items.filter((p) => p.categorySlug === activeCategory)
-    if (activeBrand) items = items.filter((p) => p.brand.toLowerCase() === activeBrand)
-    if (showNewOnly) items = items.filter((p) => p.isNew)
-    if (query.trim()) {
-      const q = query.toLowerCase()
-      items = items.filter(
-        (p) => p.name.toLowerCase().includes(q) || p.brand.toLowerCase().includes(q) || p.tags.some((t) => t.includes(q)),
-      )
-    }
-    switch (sortBy) {
-      case 'price-asc': return items.sort((a, b) => a.price - b.price)
-      case 'price-desc': return items.sort((a, b) => b.price - a.price)
-      case 'rating': return items.sort((a, b) => b.rating - a.rating)
-      default: return items
-    }
-  }, [usingMockData, activeCategory, activeBrand, showNewOnly, query, sortBy])
-
-  const totalCount = usingMockData ? filteredMock.length : (productsData?.meta?.total ?? 0)
+  const totalCount = productsData?.meta?.total ?? 0
 
   const activeCategoryName = displayCategories.find((c) => c.slug === activeCategory)?.name
   const activeBrandName = displayBrands.find((b) => b.slug === activeBrand)?.name
@@ -214,7 +189,7 @@ export function ProductsBrowser({
       {/* Product grid */}
       {!isLoading && (
         <>
-          {(usingMockData ? filteredMock : apiProducts).length === 0 ? (
+          {apiProducts.length === 0 ? (
             <div className="py-20 text-center">
               <p className="text-lg text-ap-text2">No products found.</p>
               <button onClick={clearAll} className="mt-4 text-sm text-accent hover:underline">
@@ -223,11 +198,9 @@ export function ProductsBrowser({
             </div>
           ) : (
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
-              {usingMockData
-                ? filteredMock.map((p) => <ProductCard key={p.id} product={p} />)
-                : apiProducts.map((p) => (
-                    <ProductCard key={p.id} product={toDisplayProduct(p)} />
-                  ))}
+              {apiProducts.map((p) => (
+                <ProductCard key={p.id} product={toDisplayProduct(p)} />
+              ))}
             </div>
           )}
         </>

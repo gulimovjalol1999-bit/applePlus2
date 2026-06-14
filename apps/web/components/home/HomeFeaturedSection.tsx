@@ -4,7 +4,6 @@ import { ArrowRight } from 'lucide-react'
 import { useProducts } from '@/hooks/useProducts'
 import { ProductCard } from '@/components/products/ProductCard'
 import { toDisplayProduct } from '@/lib/adapters'
-import { products as MOCK_PRODUCTS } from '@/lib/mock-data'
 import type { ProductResponse } from '@/lib/api-types'
 
 interface Props {
@@ -18,12 +17,9 @@ export function HomeFeaturedSection({ title, subtitle, viewAllHref, filters = {}
   const { data, isLoading } = useProducts({ limit: 8, status: 'active', ...filters })
 
   const apiProducts: ProductResponse[] = data?.data ?? []
-  const displayProducts =
-    apiProducts.length > 0
-      ? apiProducts.map(toDisplayProduct)
-      : MOCK_PRODUCTS.slice(0, 8)
+  const displayProducts = apiProducts.map(toDisplayProduct)
 
-  if (isLoading) return null
+  if (isLoading || displayProducts.length === 0) return null
 
   return (
     <section className="container-ap py-20">

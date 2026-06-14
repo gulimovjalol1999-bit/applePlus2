@@ -5,7 +5,6 @@ import { useRouter } from 'next/navigation'
 import { ShoppingBag, Search, Menu, X, User, ChevronDown, LogOut } from 'lucide-react'
 import { useCartUIStore } from '@/stores/cart'
 import { useCart } from '@/hooks/useCart'
-import { brands as MOCK_BRANDS } from '@/lib/mock-data'
 import { CATEGORY_ICONS } from '@/lib/category-icons'
 import { cn } from '@/lib/utils'
 import { useAuthStore } from '@/stores/auth'
@@ -58,7 +57,7 @@ export function Navbar() {
     }
   }
 
-  const allBrands = brandsData?.data ?? MOCK_BRANDS
+  const allBrands = brandsData?.data ?? []
   const otherBrands = allBrands.filter((b) => b.slug !== 'apple')
 
   return (
