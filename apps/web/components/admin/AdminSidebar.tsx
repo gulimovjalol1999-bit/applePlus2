@@ -7,6 +7,7 @@ import {
   Package,
   Users,
   Tag,
+  Award,
   BarChart3,
   LogOut,
   ChevronRight,
@@ -20,6 +21,7 @@ const NAV = [
   { href: '/admin/orders', label: 'Orders', icon: ShoppingBag },
   { href: '/admin/products', label: 'Products', icon: Package },
   { href: '/admin/categories', label: 'Categories', icon: Tag },
+  { href: '/admin/brands', label: 'Brands', icon: Award },
   { href: '/admin/users', label: 'Users', icon: Users, ownerOnly: true },
   { href: '/admin/analytics', label: 'Analytics', icon: BarChart3 },
 ]
