@@ -1,6 +1,7 @@
 'use client'
 import { useState } from 'react'
-import { Search, ChevronLeft, ChevronRight, Loader2, Package } from 'lucide-react'
+import Link from 'next/link'
+import { Search, ChevronLeft, ChevronRight, Loader2, Package, Plus } from 'lucide-react'
 import { useProducts } from '@/hooks/useProducts'
 import type { ProductResponse } from '@/lib/api-types'
 import { cn } from '@/lib/utils'
@@ -96,6 +97,12 @@ export default function AdminProductsPage() {
             {meta ? `${meta.total} products` : 'Loading…'}
           </p>
         </div>
+        <Link
+          href="/admin/products/new"
+          className="flex items-center gap-1.5 rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-white hover:bg-accent/90 transition-colors"
+        >
+          <Plus className="h-4 w-4" /> New Product
+        </Link>
       </div>
 
       {/* Filters */}

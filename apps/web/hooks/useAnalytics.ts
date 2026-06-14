@@ -2,10 +2,20 @@
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@/lib/api'
 import type {
+  DailySalesRow,
   MonthlyRevenueRow,
   TopProductRow,
   TopCategoryRow,
 } from '@/lib/api-types'
+
+export function useDailySales(startDate?: string, endDate?: string) {
+  return useQuery({
+    queryKey: ['analytics', 'daily-sales', startDate, endDate],
+    queryFn: () =>
+      api.get<DailySalesRow[]>('/analytics/daily-sales', { startDate, endDate }),
+    staleTime: 5 * 60_000,
+  })
+}
 
 export function useMonthlyRevenue(year?: number) {
   return useQuery({

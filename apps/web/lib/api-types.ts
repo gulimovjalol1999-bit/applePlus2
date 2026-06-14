@@ -31,6 +31,20 @@ export interface AuthResponse {
   tokens: TokenPair
 }
 
+// Users (admin)
+export interface UserResponse {
+  id: string
+  email: string
+  firstName: string
+  lastName: string
+  phone: string | null
+  role: 'owner' | 'manager' | 'operator' | 'warehouse' | 'customer'
+  isActive: boolean
+  emailVerifiedAt: string | null
+  createdAt: string
+  updatedAt: string
+}
+
 // Products
 export interface ProductImageResponse {
   id: string

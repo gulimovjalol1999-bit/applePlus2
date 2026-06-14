@@ -8,6 +8,7 @@ import {
   HttpStatus,
   Param,
   Patch,
+  Query,
   UseGuards,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiNoContentResponse, ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
@@ -21,6 +22,7 @@ import { UsersService } from './users.service';
 import { UpdateProfileDto } from './dto/update-profile.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { UpdateUserRoleDto } from './dto/update-user-role.dto';
+import { UserFilterDto } from './dto/user-filter.dto';
 import { UserResponseDto } from './dto/user-response.dto';
 
 @ApiTags('Users')
@@ -47,6 +49,16 @@ export class UsersController {
   ): Promise<UserResponseDto> {
     const updated = await this.usersService.updateProfile(user.id, dto);
     return this.usersService.toResponseDto(updated);
+  }
+
+  @Get()
+  @UseGuards(RolesGuard)
+  @Roles(Role.OWNER, Role.MANAGER)
+  @ApiOperation({ summary: 'List users (paginated, filterable)' })
+  @ApiOkResponse({ type: UserResponseDto, isArray: true })
+  async findAll(@Query() filter: UserFilterDto) {
+    const { data, meta } = await this.usersService.findAll(filter);
+    return { data: data.map((u) => this.usersService.toResponseDto(u)), meta };
   }
 
   @Get(':id')

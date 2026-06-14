@@ -4,8 +4,10 @@ import { IsNull, QueryFailedError, Repository } from 'typeorm';
 import { User } from './user.entity';
 import { UpdateProfileDto } from './dto/update-profile.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
+import { UserFilterDto } from './dto/user-filter.dto';
 import { UserResponseDto } from './dto/user-response.dto';
 import { Role } from '../../common/enums/role.enum';
+import { PaginatedMeta } from '../../common/dto/base-response.dto';
 
 const POSTGRES_UNIQUE_VIOLATION = '23505';
 
@@ -40,6 +42,35 @@ export class UsersService {
     const user = await this.findById(id);
     if (!user) throw new NotFoundException(`User ${id} not found`);
     return user;
+  }
+
+  async findAll(filter: UserFilterDto): Promise<{ data: User[]; meta: PaginatedMeta }> {
+    const qb = this.repo.createQueryBuilder('user');
+
+    if (filter.search) {
+      qb.andWhere(
+        '(user.email ILIKE :search OR user.firstName ILIKE :search OR user.lastName ILIKE :search)',
+        { search: `%${filter.search}%` },
+      );
+    }
+    if (filter.role) {
+      qb.andWhere('user.role = :role', { role: filter.role });
+    }
+
+    qb.orderBy('user.createdAt', 'DESC');
+    qb.skip((filter.page - 1) * filter.limit).take(filter.limit);
+
+    const [users, total] = await qb.getManyAndCount();
+
+    return {
+      data: users,
+      meta: {
+        page: filter.page,
+        limit: filter.limit,
+        total,
+        totalPages: Math.ceil(total / filter.limit),
+      },
+    };
   }
 
   async create(data: {
