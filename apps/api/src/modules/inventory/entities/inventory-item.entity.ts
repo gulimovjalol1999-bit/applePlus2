@@ -11,6 +11,7 @@ import {
 } from 'typeorm';
 import { ProductVariant } from '../../products/entities/product-variant.entity';
 import { InventoryLog } from './inventory-log.entity';
+import { UsedPhoneDetails } from './used-phone-details.entity';
 
 @Check('"quantity" >= 0')
 @Check('"reserved_quantity" >= 0')
@@ -52,6 +53,9 @@ export class InventoryItem {
 
   @OneToMany(() => InventoryLog, (log) => log.inventoryItem)
   logs: InventoryLog[];
+
+  @OneToOne(() => UsedPhoneDetails, (details) => details.inventoryItem)
+  usedPhoneDetails: UsedPhoneDetails | null;
 
   get availableQuantity(): number {
     return this.quantity - this.reservedQuantity;

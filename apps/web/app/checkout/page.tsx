@@ -8,6 +8,7 @@ import { useCart } from '@/hooks/useCart'
 import { useAddresses, useCreateAddress } from '@/hooks/useAddresses'
 import { useValidateCoupon } from '@/hooks/useCoupons'
 import { useCreateOrder } from '@/hooks/useOrders'
+import { usePaymeCheckout } from '@/hooks/usePayme'
 import { useAuthStore } from '@/stores/auth'
 import { formatPrice } from '@/lib/utils'
 import { Button } from '@/components/ui/Button'
@@ -37,6 +38,7 @@ export default function CheckoutPage() {
   const createAddress = useCreateAddress()
   const validateCoupon = useValidateCoupon()
   const createOrder = useCreateOrder()
+  const paymeCheckout = usePaymeCheckout()
 
   const [selectedAddressId, setSelectedAddressId] = useState<string | null>(null)
   const [showAddressForm, setShowAddressForm] = useState(false)
@@ -132,10 +134,18 @@ export default function CheckoutPage() {
         idempotencyKey,
       },
       {
-        onSuccess: (order) => {
+        onSuccess: async (order) => {
           resetIdempotencyKey()
-          toast.success('Order placed!')
-          router.push(`/orders/${order.id}`)
+          // Hand off to Payme's hosted checkout to collect payment.
+          try {
+            const { url } = await paymeCheckout.mutateAsync(order.id)
+            window.location.href = url
+          } catch (err) {
+            // Order exists but payment couldn't be started — send the customer to
+            // the order page where they can retry.
+            toast.error((err as Error).message)
+            router.push(`/orders/${order.id}`)
+          }
         },
         onError: (err) => {
           toast.error((err as Error).message)
@@ -229,7 +239,7 @@ export default function CheckoutPage() {
             onRemoveCoupon={handleRemoveCoupon}
             isValidatingCoupon={validateCoupon.isPending}
             onPlaceOrder={handlePlaceOrder}
-            isPlacingOrder={createOrder.isPending}
+            isPlacingOrder={createOrder.isPending || paymeCheckout.isPending}
             canPlaceOrder={!!selectedAddressId}
           />
         </div>

@@ -109,6 +109,88 @@ export class InventoryService {
     });
   }
 
+  // Used by ProductsService when creating a variant. Pass `manager` to participate
+  // in the caller's transaction.
+  async createForVariant(
+    variantId: string,
+    opts: { quantity?: number; reorderLevel?: number; warehouseLocation?: string } = {},
+    manager?: EntityManager,
+  ): Promise<InventoryItem> {
+    const repo = manager ? manager.getRepository(InventoryItem) : this.itemRepo;
+    const item = repo.create({
+      variantId,
+      quantity: opts.quantity ?? 0,
+      reorderLevel: opts.reorderLevel ?? 5,
+      warehouseLocation: opts.warehouseLocation ?? null,
+    });
+    const savedItem = await repo.save(item);
+
+    const quantity = opts.quantity ?? 0;
+    if (quantity > 0) {
+      const logRepo = manager ? manager.getRepository(InventoryLog) : this.logRepo;
+      const log = logRepo.create({
+        inventoryItemId: savedItem.id,
+        eventType: InventoryEventType.MANUAL,
+        adjustment: quantity,
+        quantityBefore: 0,
+        quantityAfter: quantity,
+        reason: 'Initial stock on creation',
+        performedById: null,
+      });
+      await logRepo.save(log);
+    }
+
+    return savedItem;
+  }
+
+  // Used by UsedPhonesService.update() (and available for other admin flows) to
+  // directly set the absolute quantity, with audit logging and reserved-quantity
+  // validation. Must be called within an active transaction.
+  async setQuantity(
+    variantId: string,
+    newQuantity: number,
+    manager: EntityManager,
+    reason = 'Manual quantity update',
+  ): Promise<void> {
+    this.assertTransaction(manager, 'setQuantity');
+
+    const item = await manager
+      .createQueryBuilder(InventoryItem, 'inv')
+      .setLock('pessimistic_write')
+      .where('inv.variant_id = :variantId', { variantId })
+      .getOne();
+
+    if (!item) throw new NotFoundException(`Inventory not found for variant ${variantId}`);
+
+    if (newQuantity < 0) {
+      throw new UnprocessableEntityException(
+        `Quantity cannot be negative (${newQuantity})`,
+      );
+    }
+    if (newQuantity < item.reservedQuantity) {
+      throw new UnprocessableEntityException(
+        `New quantity (${newQuantity}) cannot be less than reserved quantity (${item.reservedQuantity})`,
+      );
+    }
+
+    if (newQuantity === item.quantity) return;
+
+    const quantityBefore = item.quantity;
+    item.quantity = newQuantity;
+    await manager.save(InventoryItem, item);
+
+    const log = manager.create(InventoryLog, {
+      inventoryItemId: item.id,
+      eventType: InventoryEventType.MANUAL,
+      adjustment: newQuantity - quantityBefore,
+      quantityBefore,
+      quantityAfter: newQuantity,
+      reason,
+      performedById: null,
+    });
+    await manager.save(InventoryLog, log);
+  }
+
   async update(variantId: string, dto: UpdateInventoryDto): Promise<InventoryItemDto> {
     const item = await this.itemRepo.findOne({
       where: { variantId },

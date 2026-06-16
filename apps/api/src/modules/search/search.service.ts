@@ -80,6 +80,7 @@ export class SearchService {
       basePrice: +p.basePrice,
       salePrice: p.salePrice !== null ? +p.salePrice : null,
       status: p.status,
+      productType: p.productType,
       tags: p.tags ?? [],
       metaTitle: p.metaTitle,
       metaDescription: p.metaDescription,

@@ -31,6 +31,9 @@ import { UpdateProductDto } from './dto/update-product.dto';
 import { UpdateStatusDto } from './dto/update-status.dto';
 import { ProductFilterDto } from './dto/product-filter.dto';
 import { ProductResponseDto } from './dto/product-response.dto';
+import { CreateProductVariantDto } from './dto/create-product-variant.dto';
+import { UpdateProductVariantDto } from './dto/update-product-variant.dto';
+import { CreateProductImageDto } from './dto/create-product-image.dto';
 
 @ApiTags('Products')
 @Controller('products')
@@ -107,5 +110,71 @@ export class ProductsController {
   @ApiNoContentResponse()
   remove(@Param('id', ParseUuidPipe) id: string) {
     return this.productsService.remove(id);
+  }
+
+  @Post(':id/variants')
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.OWNER, Role.MANAGER)
+  @ApiOperation({ summary: 'Add a variant to a product' })
+  @ApiCreatedResponse({ type: ProductResponseDto })
+  createVariant(
+    @Param('id', ParseUuidPipe) id: string,
+    @Body() dto: CreateProductVariantDto,
+  ) {
+    return this.productsService.createVariant(id, dto);
+  }
+
+  @Patch(':id/variants/:variantId')
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.OWNER, Role.MANAGER)
+  @ApiOperation({ summary: 'Update a product variant' })
+  @ApiOkResponse({ type: ProductResponseDto })
+  updateVariant(
+    @Param('id', ParseUuidPipe) id: string,
+    @Param('variantId', ParseUuidPipe) variantId: string,
+    @Body() dto: UpdateProductVariantDto,
+  ) {
+    return this.productsService.updateVariant(id, variantId, dto);
+  }
+
+  @Delete(':id/variants/:variantId')
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.OWNER, Role.MANAGER)
+  @ApiOperation({ summary: 'Soft-delete a product variant' })
+  @ApiOkResponse({ type: ProductResponseDto })
+  removeVariant(
+    @Param('id', ParseUuidPipe) id: string,
+    @Param('variantId', ParseUuidPipe) variantId: string,
+  ) {
+    return this.productsService.removeVariant(id, variantId);
+  }
+
+  @Post(':id/images')
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.OWNER, Role.MANAGER)
+  @ApiOperation({ summary: 'Add an image to a product' })
+  @ApiCreatedResponse({ type: ProductResponseDto })
+  createImage(
+    @Param('id', ParseUuidPipe) id: string,
+    @Body() dto: CreateProductImageDto,
+  ) {
+    return this.productsService.createImage(id, dto);
+  }
+
+  @Delete(':id/images/:imageId')
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.OWNER, Role.MANAGER)
+  @ApiOperation({ summary: 'Delete a product image' })
+  @ApiOkResponse({ type: ProductResponseDto })
+  removeImage(
+    @Param('id', ParseUuidPipe) id: string,
+    @Param('imageId', ParseUuidPipe) imageId: string,
+  ) {
+    return this.productsService.removeImage(id, imageId);
   }
 }

@@ -11,13 +11,21 @@ export function AdminGuard({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, user } = useAuthStore()
 
   useEffect(() => {
-    if (!isAuthenticated || !user) {
-      router.replace('/login?redirect=/admin')
-      return
-    }
-    if (!ADMIN_ROLES.includes(user.role)) {
-      router.replace('/')
-    }
+    // On a hard navigation, the first client render reflects the
+    // pre-hydration store state (isAuthenticated: false) before the
+    // persisted localStorage state is applied a moment later. Defer
+    // the redirect so the re-render with the rehydrated state can
+    // cancel it via the cleanup below.
+    const t = setTimeout(() => {
+      if (!isAuthenticated || !user) {
+        router.replace('/login?redirect=/admin')
+        return
+      }
+      if (!ADMIN_ROLES.includes(user.role)) {
+        router.replace('/')
+      }
+    }, 100)
+    return () => clearTimeout(t)
   }, [isAuthenticated, user, router])
 
   if (!isAuthenticated || !user || !ADMIN_ROLES.includes(user.role)) {

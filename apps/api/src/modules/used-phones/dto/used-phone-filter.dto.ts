@@ -1,15 +1,14 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
-import { IsEnum, IsInt, IsOptional, IsString, IsUUID, Max, Min } from 'class-validator';
+import { IsEnum, IsInt, IsNumber, IsOptional, IsString, IsUUID, Max, Min } from 'class-validator';
 import { PaginationDto } from '../../../common/dto/pagination.dto';
 import { CarrierLockStatus } from '../../../common/enums/carrier-lock-status.enum';
 import { ProductStatus } from '../../../common/enums/product-status.enum';
-import { ProductType } from '../../../common/enums/product-type.enum';
 import { UsedPhoneConditionGrade } from '../../../common/enums/used-phone-condition.enum';
 import { UsedPhoneWarrantyType } from '../../../common/enums/used-phone-warranty.enum';
 
-export class ProductFilterDto extends PaginationDto {
-  @ApiPropertyOptional({ description: 'Search by name, slug, or tag' })
+export class UsedPhoneFilterDto extends PaginationDto {
+  @ApiPropertyOptional({ description: 'Search by product name, IMEI, or serial number' })
   @IsString()
   @IsOptional()
   search?: string;
@@ -17,39 +16,48 @@ export class ProductFilterDto extends PaginationDto {
   @ApiPropertyOptional()
   @IsUUID()
   @IsOptional()
-  categoryId?: string;
+  brandId?: string;
 
   @ApiPropertyOptional()
   @IsUUID()
   @IsOptional()
-  brandId?: string;
+  categoryId?: string;
+
+  @ApiPropertyOptional({ enum: UsedPhoneConditionGrade })
+  @IsEnum(UsedPhoneConditionGrade)
+  @IsOptional()
+  conditionGrade?: UsedPhoneConditionGrade;
+
+  @ApiPropertyOptional({ enum: CarrierLockStatus })
+  @IsEnum(CarrierLockStatus)
+  @IsOptional()
+  carrierLockStatus?: CarrierLockStatus;
+
+  @ApiPropertyOptional({ enum: UsedPhoneWarrantyType })
+  @IsEnum(UsedPhoneWarrantyType)
+  @IsOptional()
+  warrantyType?: UsedPhoneWarrantyType;
 
   @ApiPropertyOptional({ enum: ProductStatus })
   @IsEnum(ProductStatus)
   @IsOptional()
   status?: ProductStatus;
 
-  @ApiPropertyOptional({ enum: ProductType })
-  @IsEnum(ProductType)
+  @ApiPropertyOptional({ minimum: 0 })
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
   @IsOptional()
-  productType?: ProductType;
+  minPrice?: number;
 
-  @ApiPropertyOptional({ enum: UsedPhoneConditionGrade, description: 'Used phones only' })
-  @IsEnum(UsedPhoneConditionGrade)
+  @ApiPropertyOptional({ minimum: 0 })
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
   @IsOptional()
-  conditionGrade?: UsedPhoneConditionGrade;
+  maxPrice?: number;
 
-  @ApiPropertyOptional({ enum: CarrierLockStatus, description: 'Used phones only' })
-  @IsEnum(CarrierLockStatus)
-  @IsOptional()
-  carrierLockStatus?: CarrierLockStatus;
-
-  @ApiPropertyOptional({ enum: UsedPhoneWarrantyType, description: 'Used phones only' })
-  @IsEnum(UsedPhoneWarrantyType)
-  @IsOptional()
-  warrantyType?: UsedPhoneWarrantyType;
-
-  @ApiPropertyOptional({ minimum: 0, maximum: 100, description: 'Used phones only' })
+  @ApiPropertyOptional({ minimum: 0, maximum: 100 })
   @Type(() => Number)
   @IsInt()
   @Min(0)
@@ -57,7 +65,7 @@ export class ProductFilterDto extends PaginationDto {
   @IsOptional()
   minBattery?: number;
 
-  @ApiPropertyOptional({ minimum: 0, maximum: 100, description: 'Used phones only' })
+  @ApiPropertyOptional({ minimum: 0, maximum: 100 })
   @Type(() => Number)
   @IsInt()
   @Min(0)
@@ -65,10 +73,10 @@ export class ProductFilterDto extends PaginationDto {
   @IsOptional()
   maxBattery?: number;
 
-  @ApiPropertyOptional({ enum: ['name', 'basePrice', 'createdAt', 'averageRating'], default: 'createdAt' })
+  @ApiPropertyOptional({ enum: ['price', 'createdAt', 'batteryHealthPercent'], default: 'createdAt' })
   @IsString()
   @IsOptional()
-  sortBy?: 'name' | 'basePrice' | 'createdAt' | 'averageRating' = 'createdAt';
+  sortBy?: 'price' | 'createdAt' | 'batteryHealthPercent' = 'createdAt';
 
   @ApiPropertyOptional({ enum: ['ASC', 'DESC'], default: 'DESC' })
   @IsString()

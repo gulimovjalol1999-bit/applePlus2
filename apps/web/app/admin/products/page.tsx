@@ -19,7 +19,7 @@ function ProductRow({ product }: { product: ProductResponse }) {
   return (
     <tr className="border-t border-gray-100 hover:bg-gray-50 transition-colors">
       <td className="px-4 py-3">
-        <div className="flex items-center gap-3">
+        <Link href={`/admin/products/${product.id}`} className="flex items-center gap-3">
           {primaryImage ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img
@@ -33,10 +33,10 @@ function ProductRow({ product }: { product: ProductResponse }) {
             </div>
           )}
           <div className="min-w-0">
-            <p className="truncate text-sm font-medium text-ap-black max-w-[220px]">{product.name}</p>
+            <p className="truncate text-sm font-medium text-ap-black hover:text-accent max-w-[220px]">{product.name}</p>
             <p className="text-[11px] text-gray-400">{product.slug}</p>
           </div>
-        </div>
+        </Link>
       </td>
       <td className="px-4 py-3 text-sm text-gray-500">{product.categoryName ?? '—'}</td>
       <td className="px-4 py-3 text-sm text-gray-500">{product.brandName ?? '—'}</td>

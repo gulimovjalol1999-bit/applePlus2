@@ -28,6 +28,13 @@ export class ResponseTransformInterceptor<T>
       return next.handle() as Observable<SuccessResponse<T>>;
     }
 
+    // Payme Merchant API callback must return a raw JSON-RPC body, not our
+    // { success, data } envelope. Only the exact merchant endpoint is exempt —
+    // /payments/payme/checkout keeps the normal envelope.
+    if (req.path?.endsWith('/payments/payme')) {
+      return next.handle() as Observable<SuccessResponse<T>>;
+    }
+
     return next.handle().pipe(
       map((data) => {
         if (

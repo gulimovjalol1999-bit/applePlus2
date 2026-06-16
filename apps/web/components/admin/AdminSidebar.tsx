@@ -11,6 +11,7 @@ import {
   BarChart3,
   LogOut,
   ChevronRight,
+  Smartphone,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useAuthStore } from '@/stores/auth'
@@ -20,6 +21,7 @@ const NAV = [
   { href: '/admin', label: 'Dashboard', icon: LayoutDashboard, exact: true },
   { href: '/admin/orders', label: 'Orders', icon: ShoppingBag },
   { href: '/admin/products', label: 'Products', icon: Package },
+  { href: '/admin/used-phones', label: 'Used Phones', icon: Smartphone },
   { href: '/admin/categories', label: 'Categories', icon: Tag },
   { href: '/admin/brands', label: 'Brands', icon: Award },
   { href: '/admin/users', label: 'Users', icon: Users, ownerOnly: true },

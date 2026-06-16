@@ -127,13 +127,47 @@ async function request<T>(
 
   if (res.status === 204) return undefined as T
   const json = await res.json()
-  // Unwrap NestJS ResponseTransformInterceptor: { success: true, data: T }
-  return ((json as { data?: unknown })?.data ?? json) as T
+  // Unwrap NestJS ResponseTransformInterceptor: { success: true, data: T, meta?: PaginatedMeta }
+  // Paginated list endpoints return { data, meta } — keep both. Everything else unwraps to .data.
+  if (json && typeof json === 'object' && 'data' in json) {
+    const envelope = json as { data: unknown; meta?: unknown }
+    if ('meta' in envelope) return { data: envelope.data, meta: envelope.meta } as T
+    return envelope.data as T
+  }
+  return json as T
+}
+
+async function uploadImage(file: File): Promise<{ url: string; key: string }> {
+  const token = getAccessToken()
+  const headers: Record<string, string> = {}
+  if (token) headers['Authorization'] = `Bearer ${token}`
+
+  const formData = new FormData()
+  formData.append('file', file)
+
+  const res = await fetch(`${BASE_URL}/uploads/image`, {
+    method: 'POST',
+    headers,
+    body: formData,
+  })
+
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}))
+    const errBody = body?.data ?? body
+    const message = Array.isArray(errBody?.message)
+      ? errBody.message.join(', ')
+      : (errBody?.message ?? body?.message ?? `Upload failed: ${res.status}`)
+    throw new Error(message)
+  }
+
+  const json = await res.json()
+  return ((json as { data?: unknown })?.data ?? json) as { url: string; key: string }
 }
 
 export const api = {
   get: <T>(path: string, params?: QueryParams) =>
     request<T>(`${path}${buildQuery(params)}`, { method: 'GET' }),
+  uploadImage,
   post: <T>(path: string, body?: unknown, options?: { headers?: Record<string, string> }) =>
     request<T>(path, {
       method: 'POST',

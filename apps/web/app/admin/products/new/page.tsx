@@ -55,9 +55,9 @@ export default function NewProductPage() {
     }
 
     createProduct.mutate(payload, {
-      onSuccess: () => {
+      onSuccess: (created) => {
         toast.success('Product created')
-        router.push('/admin/products')
+        router.push(`/admin/products/${created.id}`)
       },
       onError: (err) => toast.error(err.message),
     })
@@ -226,10 +226,6 @@ export default function NewProductPage() {
           </button>
         </div>
       </form>
-
-      <p className="mt-4 text-xs text-gray-400">
-        New products are created as drafts by default. Images and variants can be added via the API.
-      </p>
     </div>
   )
 }

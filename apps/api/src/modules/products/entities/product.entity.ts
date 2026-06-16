@@ -8,6 +8,7 @@ import {
 } from 'typeorm';
 import { BaseEntity } from '../../../common/entities/base.entity';
 import { ProductStatus } from '../../../common/enums/product-status.enum';
+import { ProductType } from '../../../common/enums/product-type.enum';
 import { Brand } from '../../brands/brand.entity';
 import { Category } from '../../categories/category.entity';
 import { ProductImage } from './product-image.entity';
@@ -57,6 +58,13 @@ export class Product extends BaseEntity {
     default: ProductStatus.DRAFT,
   })
   status: ProductStatus;
+
+  @Column({
+    type: 'enum',
+    enum: ProductType,
+    default: ProductType.NEW,
+  })
+  productType: ProductType;
 
   @Column({ type: 'text', array: true, default: '{}' })
   tags: string[];

@@ -12,6 +12,7 @@ import mailConfig from './config/mail.config';
 import redisConfig from './config/redis.config';
 import storageConfig from './config/storage.config';
 import telegramConfig from './config/telegram.config';
+import paymeConfig from './config/payme.config';
 import { DatabaseModule } from './database/database.module';
 import { RedisModule } from './redis/redis.module';
 import { HealthModule } from './modules/health/health.module';
@@ -21,6 +22,7 @@ import { ProductsModule } from './modules/products/products.module';
 import { CategoriesModule } from './modules/categories/categories.module';
 import { BrandsModule } from './modules/brands/brands.module';
 import { InventoryModule } from './modules/inventory/inventory.module';
+import { UsedPhonesModule } from './modules/used-phones/used-phones.module';
 import { OrdersModule } from './modules/orders/orders.module';
 import { CartModule } from './modules/cart/cart.module';
 import { WishlistModule } from './modules/wishlist/wishlist.module';
@@ -38,7 +40,7 @@ import { UploadsModule } from './modules/uploads/uploads.module';
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
-      load: [appConfig, databaseConfig, jwtConfig, mailConfig, redisConfig, storageConfig, telegramConfig],
+      load: [appConfig, databaseConfig, jwtConfig, mailConfig, redisConfig, storageConfig, telegramConfig, paymeConfig],
       envFilePath: ['.env.local', '.env', '../../.env.local', '../../.env'],
       validationSchema: Joi.object({
         NODE_ENV: Joi.string().valid('development', 'production', 'test').default('development'),
@@ -61,6 +63,11 @@ import { UploadsModule } from './modules/uploads/uploads.module';
         MAIL_USER: Joi.string().allow('').optional(),
         MAIL_PASS: Joi.string().allow('').optional(),
         MAIL_FROM: Joi.string().email().default('noreply@apple-plus.com'),
+        PAYME_MERCHANT_ID: Joi.string().allow('').optional(),
+        PAYME_KEY: Joi.string().allow('').optional(),
+        PAYME_TEST_MODE: Joi.boolean().default(true),
+        PAYME_ACCOUNT_FIELD: Joi.string().default('order_id'),
+        PAYME_RETURN_URL: Joi.string().allow('').optional(),
       }),
       validationOptions: { abortEarly: false },
     }),
@@ -89,6 +96,7 @@ import { UploadsModule } from './modules/uploads/uploads.module';
     CategoriesModule,
     BrandsModule,
     InventoryModule,
+    UsedPhonesModule,
     OrdersModule,
     CartModule,
     WishlistModule,
