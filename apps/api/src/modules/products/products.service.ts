@@ -215,10 +215,8 @@ export class ProductsService {
     const product = await this.productRepo.findOne({ where: { id } });
     if (!product) throw new NotFoundException(`Product ${id} not found`);
 
-    if (dto.name && dto.name !== product.name) {
-      product.slug = await this.uniqueSlug(dto.name, id);
-    }
-
+    // Slug is frozen after creation: renaming a product must NOT change its slug,
+    // otherwise saved/shared links and search-engine indexes break (404 with no redirect).
     Object.assign(product, {
       ...dto,
       updatedById: updatedById ?? product.updatedById,

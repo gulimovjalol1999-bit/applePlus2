@@ -8,6 +8,10 @@ export class CreatePaymeCheckoutDto {
 }
 
 export class PaymeCheckoutResponseDto {
-  @ApiProperty({ description: 'Payme hosted checkout URL to redirect the customer to' })
-  url: string;
+  @ApiProperty({
+    nullable: true,
+    description:
+      'Payme hosted checkout URL to redirect the customer to, or null when Payme is not configured (skip payment).',
+  })
+  url: string | null;
 }

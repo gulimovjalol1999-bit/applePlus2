@@ -74,9 +74,8 @@ export class BrandsService {
     const brand = await this.repo.findOne({ where: { id } });
     if (!brand) throw new NotFoundException(`Brand ${id} not found`);
 
-    if (dto.name && dto.name !== brand.name) {
-      brand.slug = await this.uniqueSlug(dto.name, id);
-    }
+    // Slug is frozen after creation: renaming must NOT change the slug so existing
+    // links and search-engine indexes stay valid (no 404 / redirect needed).
     Object.assign(brand, dto);
     await this.repo.save(brand);
     return this.findOne(id);

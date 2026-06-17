@@ -136,10 +136,16 @@ export default function CheckoutPage() {
       {
         onSuccess: async (order) => {
           resetIdempotencyKey()
-          // Hand off to Payme's hosted checkout to collect payment.
+          // Hand off to Payme's hosted checkout to collect payment. When Payme is
+          // not configured the API returns url=null, so we just confirm the order.
           try {
             const { url } = await paymeCheckout.mutateAsync(order.id)
-            window.location.href = url
+            if (url) {
+              window.location.href = url
+              return
+            }
+            toast.success('Order placed!')
+            router.push(`/orders/${order.id}`)
           } catch (err) {
             // Order exists but payment couldn't be started — send the customer to
             // the order page where they can retry.

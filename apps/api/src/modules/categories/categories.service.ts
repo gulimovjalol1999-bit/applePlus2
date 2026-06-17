@@ -87,9 +87,8 @@ export class CategoriesService {
     const cat = await this.repo.findOne({ where: { id } });
     if (!cat) throw new NotFoundException(`Category ${id} not found`);
 
-    if (dto.name && dto.name !== cat.name) {
-      cat.slug = await this.uniqueSlug(dto.name, id);
-    }
+    // Slug is frozen after creation: renaming must NOT change the slug so existing
+    // links and search-engine indexes stay valid (no 404 / redirect needed).
     Object.assign(cat, dto);
     await this.repo.save(cat);
     return this.findOne(id);

@@ -33,7 +33,12 @@ export class PaymeService {
   // Outbound: build the hosted-checkout redirect URL for a customer
   // ──────────────────────────────────────────────────────────────────────────
 
-  async buildCheckoutUrl(orderId: string, userId: string): Promise<string> {
+  async buildCheckoutUrl(orderId: string, userId: string): Promise<string | null> {
+    const merchantId = this.config.get<string>('payme.merchantId');
+    // Payme not configured yet → signal the caller to skip the redirect and let
+    // the order complete without online payment.
+    if (!merchantId) return null;
+
     const order = await this.orderRepo.findOne({ where: { id: orderId } });
     if (!order || order.userId !== userId) {
       throw PaymeError.orderNotFound();
@@ -42,7 +47,6 @@ export class PaymeService {
       throw PaymeError.orderNotPayable();
     }
 
-    const merchantId = this.config.get<string>('payme.merchantId');
     const accountField = this.config.get<string>('payme.accountField');
     const baseUrl = this.config.get<string>('payme.checkoutBaseUrl');
     const returnUrl = this.config.get<string>('payme.returnUrl');

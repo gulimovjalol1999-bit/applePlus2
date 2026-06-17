@@ -294,7 +294,8 @@ export interface OrderResponse {
 }
 
 export interface PaymeCheckoutResponse {
-  url: string
+  // null when Payme is not configured — the order completes without online payment.
+  url: string | null
 }
 
 // Analytics
